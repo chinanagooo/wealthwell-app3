@@ -378,6 +378,111 @@ function Flashcard({ action:a, onDone, cur }) {
   );
 }
 
+// ─── LOGIN SCREEN ────────────────────────────────────────────────────────────
+function LoginScreen({ onLogin, onCreateAccount }) {
+  const [email, setEmail]         = useState("");
+  const [password, setPassword]   = useState("");
+  const [showPw, setShowPw]       = useState(false);
+  const [error, setError]         = useState("");
+  const [loading, setLoading]     = useState(false);
+
+  const handleLogin = () => {
+    setError("");
+    if (!email.trim() || !password) { setError("Please enter your email and password."); return; }
+    setLoading(true);
+    setTimeout(() => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const d = JSON.parse(saved);
+          if (d.profile) {
+            const storedEmail = (d.profile.email || "").toLowerCase().trim();
+            const enteredEmail = email.toLowerCase().trim();
+            const storedHash = d.profile.passwordHash;
+            const enteredHash = btoa(unescape(encodeURIComponent(password)));
+            if (storedEmail === enteredEmail && storedHash === enteredHash) {
+              onLogin(d);
+              return;
+            }
+          }
+        }
+        setError("Incorrect email or password. Please try again.");
+      } catch(e) {
+        setError("An error occurred. Please try again.");
+      }
+      setLoading(false);
+    }, 500);
+  };
+
+  const cardStyle = { background:"white", borderRadius:24, padding:"40px 44px",
+    width:"100%", maxWidth:440, boxShadow:"0 24px 64px rgba(0,0,0,0.12)",
+    border:"1px solid #fecaca", animation:"fadeUp 0.35s ease" };
+
+  return (
+    <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#fff5f5 0%,#fef2f2 50%,#fff1f1 100%)",
+      display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+      padding:"24px 16px", fontFamily:"'Sora','Segoe UI',sans-serif" }}>
+      <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+      <style>{`
+        *{box-sizing:border-box;margin:0;padding:0;}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+        input:focus{border-color:#dc2626!important;outline:none!important;box-shadow:0 0 0 3px rgba(220,38,38,0.12)!important;}
+      `}</style>
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:32 }}>
+        <div style={{ width:38, height:38, background:"linear-gradient(135deg,#dc2626,#991b1b)",
+          borderRadius:11, display:"flex", alignItems:"center", justifyContent:"center",
+          fontSize:18, boxShadow:"0 4px 14px rgba(220,38,38,0.35)" }}>⬡</div>
+        <div>
+          <div style={{ fontSize:18, fontWeight:800, color:"#1a0505" }}>WealthWell</div>
+          <div style={{ fontSize:10, color:"#9ca3af" }}>WEALTH WELLNESS HUB · SG</div>
+        </div>
+      </div>
+      <div style={cardStyle}>
+        <h2 style={{ fontSize:22, fontWeight:800, color:"#1a0505", marginBottom:4 }}>Welcome back</h2>
+        <p style={{ fontSize:12, color:"#9ca3af", marginBottom:28 }}>Sign in to your WealthWell account</p>
+        <div style={{ marginBottom:14 }}>
+          <label style={{ display:"block", fontSize:11, fontWeight:700, color:"#374151", marginBottom:5 }}>Email Address</label>
+          <input type="email" value={email} onChange={e=>{setEmail(e.target.value);setError("");}}
+            placeholder="you@example.com"
+            onKeyDown={e=>e.key==="Enter"&&handleLogin()}
+            style={{ width:"100%", padding:"10px 14px", borderRadius:10, border:"1px solid #e5e7eb",
+              background:"white", color:"#111827", fontSize:13, fontFamily:"'Sora',sans-serif", outline:"none" }}/>
+        </div>
+        <div style={{ marginBottom:20 }}>
+          <label style={{ display:"block", fontSize:11, fontWeight:700, color:"#374151", marginBottom:5 }}>Password</label>
+          <div style={{ position:"relative" }}>
+            <input type={showPw?"text":"password"} value={password} onChange={e=>{setPassword(e.target.value);setError("");}}
+              placeholder="Enter your password"
+              onKeyDown={e=>e.key==="Enter"&&handleLogin()}
+              style={{ width:"100%", padding:"10px 40px 10px 14px", borderRadius:10, border:"1px solid #e5e7eb",
+                background:"white", color:"#111827", fontSize:13, fontFamily:"'Sora',sans-serif", outline:"none" }}/>
+            <button onClick={()=>setShowPw(s=>!s)} style={{ position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:14,color:"#9ca3af" }}>{showPw?"🙈":"👁"}</button>
+          </div>
+        </div>
+        {error && <div style={{ fontSize:11, color:"#dc2626", fontWeight:600, marginBottom:14, padding:"9px 13px",
+          background:"#fff1f0", borderRadius:9, border:"1px solid #fca5a5" }}>{error}</div>}
+        <button onClick={handleLogin} disabled={loading}
+          style={{ width:"100%", padding:"13px", borderRadius:12, border:"none",
+            background:loading?"#e5e7eb":"linear-gradient(135deg,#dc2626,#b91c1c)", color:loading?"#9ca3af":"white",
+            fontSize:13, fontWeight:700, cursor:loading?"not-allowed":"pointer", fontFamily:"'Sora',sans-serif",
+            marginBottom:12, boxShadow:loading?"none":"0 6px 20px rgba(220,38,38,0.3)" }}>
+          {loading ? "Signing in…" : "Sign In →"}
+        </button>
+        <div style={{ textAlign:"center", fontSize:11, color:"#9ca3af", marginBottom:4 }}>Don't have an account?</div>
+        <button onClick={onCreateAccount}
+          style={{ width:"100%", padding:"13px", borderRadius:12,
+            border:"2px solid #dc2626", background:"transparent", color:"#dc2626",
+            fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"'Sora',sans-serif",
+            transition:"all 0.2s" }}
+          onMouseEnter={e=>{e.currentTarget.style.background="#fff5f5";}}
+          onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}>
+          Create New Account
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── ONBOARDING WIZARD ────────────────────────────────────────────────────────
 const TOTAL_STEPS = 6; // 1-6 (0 = welcome)
 
@@ -1257,6 +1362,8 @@ const NAV = [
 export default function App() {
   // ── Onboarding gate ──
   const [onboarded, setOnboarded] = useState(false);
+  const [loggedIn,  setLoggedIn]  = useState(false);
+  const [showLogin, setShowLogin] = useState(true); // true=login, false=create account
   const [loading,   setLoading]   = useState(true);
 
   // ── Core state ──
@@ -1302,15 +1409,8 @@ export default function App() {
       if (saved) {
         const d = JSON.parse(saved);
         if (d.profile && d.profile.name) {
-          setProfile(d.profile);
-          setAssets(d.assets   || []);
-          setLiabs(d.liabs     || []);
-          setConnected(d.connected || {});
-          setExpenses(d.expenses   || INIT_EXPENSES);
-          setSpendLimit(d.spendLimit || 100);
-          setDone(d.done           || []);
-          setParams(d.params       || params);
-          setOnboarded(true);
+          // Account exists — show login screen (don't auto-login)
+          setOnboarded(true); // account data exists
         }
       }
     } catch(e) { /* silent fail */ }
@@ -1334,6 +1434,21 @@ export default function App() {
     setLiabs(data.liabs     || []);
     setConnected(data.connected || {});
     setOnboarded(true);
+    setLoggedIn(true);
+    setEditP(data.profile);
+  }, []);
+
+  // ── Login callback ──
+  const handleLogin = useCallback((data) => {
+    setProfile(data.profile);
+    setAssets(data.assets   || []);
+    setLiabs(data.liabs     || []);
+    setConnected(data.connected || {});
+    setExpenses(data.expenses   || INIT_EXPENSES);
+    setSpendLimit(data.spendLimit || 100);
+    setDone(data.done           || []);
+    setParams(data.params       || {crash:{equityDrop:20,cryptoDrop:40},jobloss:{months:12},rates:{hikePct:2},retirement:{years:26,monthly:500},property:{price:600000}});
+    setLoggedIn(true);
     setEditP(data.profile);
   }, []);
 
@@ -1455,7 +1570,15 @@ export default function App() {
       <div style={{fontSize:32,animation:"pulse 1.2s infinite"}}>⬡</div>
     </div>
   );
-  if (!onboarded) return <OnboardingWizard onComplete={handleOnboardingComplete}/>;
+  // If account exists but not logged in → show login
+  if (onboarded && !loggedIn) return (
+    <LoginScreen
+      onLogin={handleLogin}
+      onCreateAccount={() => { setOnboarded(false); setShowLogin(false); }}
+    />
+  );
+  // If no account yet → show onboarding wizard
+  if (!onboarded || !loggedIn) return <OnboardingWizard onComplete={handleOnboardingComplete}/>;
   if (!profile)   return <OnboardingWizard onComplete={handleOnboardingComplete}/>;
 
   const firstName = (profile.name||"").split(" ")[0] || "User";
@@ -1473,6 +1596,10 @@ export default function App() {
         .hov:hover{transform:translateY(-2px)!important;box-shadow:0 8px 26px rgba(0,0,0,0.09)!important;transition:all 0.2s!important;}
         .nb:hover{background:rgba(255,255,255,0.14)!important;}
         input:focus,select:focus{border-color:#6366f1!important;outline:none!important;}
+        input[type=range]{-webkit-appearance:none;appearance:none;height:6px;border-radius:3px;background:#e2e8f0;outline:none;cursor:pointer;}
+        input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;background:currentColor;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.2);}
+        input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:currentColor;cursor:pointer;border:none;box-shadow:0 2px 6px rgba(0,0,0,0.2);}
+        input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;}
       `}</style>
 
       <div style={{position:"fixed",top:0,left:220,right:0,height:195,background:topBand,zIndex:0,pointerEvents:"none",transition:"background 0.4s"}}/>
@@ -1533,52 +1660,24 @@ export default function App() {
             </button>
           </div>
 
-          {/* New Profile / Reset button */}
-          {!showResetConfirm ? (
-            <button
-              onClick={()=>{setShowResetConfirm(true);setResetPwInput("");setResetPwError("");}}
-              style={{width:"100%",padding:"7px 11px",borderRadius:9,border:"1px solid rgba(255,255,255,0.18)",background:"rgba(255,255,255,0.07)",color:"rgba(255,255,255,0.6)",fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"'Sora',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all 0.2s"}}
-              onMouseEnter={e=>{e.currentTarget.style.background="rgba(220,38,38,0.25)";e.currentTarget.style.borderColor="rgba(220,38,38,0.5)";e.currentTarget.style.color="white";}}
-              onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.07)";e.currentTarget.style.borderColor="rgba(255,255,255,0.18)";e.currentTarget.style.color="rgba(255,255,255,0.6)";}}
-            >
-              <span style={{fontSize:12}}>↩</span> New Profile / Reset
-            </button>
-          ) : (
-            <div style={{background:"rgba(220,38,38,0.18)",border:"1px solid rgba(220,38,38,0.45)",borderRadius:10,padding:"10px 11px"}}>
-              <div style={{fontSize:10,fontWeight:700,color:"#fca5a5",marginBottom:6,lineHeight:1.4}}>
-                🔒 Enter your password to confirm reset
-              </div>
-              <div style={{fontSize:9,color:"rgba(255,200,200,0.7)",marginBottom:8,lineHeight:1.4}}>
-                ⚠️ This will permanently clear all your data.
-              </div>
-              <div style={{position:"relative",marginBottom:6}}>
-                <input
-                  type="password"
-                  value={resetPwInput}
-                  onChange={e=>{setResetPwInput(e.target.value);setResetPwError("");}}
-                  placeholder="Your password"
-                  style={{width:"100%",padding:"7px 10px",borderRadius:7,border:`1px solid ${resetPwError?"#f87171":"rgba(255,255,255,0.2)"}`,background:"rgba(0,0,0,0.3)",color:"white",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none"}}
-                />
-                {resetPwError&&<div style={{fontSize:9,color:"#f87171",marginTop:3}}>{resetPwError}</div>}
-              </div>
-              <div style={{display:"flex",gap:6}}>
-                <button
-                  onClick={()=>{setShowResetConfirm(false);setResetPwInput("");setResetPwError("");}}
-                  style={{flex:1,padding:"6px 0",borderRadius:7,border:"1px solid rgba(255,255,255,0.2)",background:"transparent",color:"rgba(255,255,255,0.7)",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}
-                >Cancel</button>
-                <button
-                  onClick={()=>{
-                    const stored = profile?.passwordHash;
-                    const entered = btoa(unescape(encodeURIComponent(resetPwInput)));
-                    if(!stored){ localStorage.removeItem(STORAGE_KEY); window.location.reload(); return; }
-                    if(entered===stored){ localStorage.removeItem(STORAGE_KEY); window.location.reload(); }
-                    else { setResetPwError("Incorrect password. Try again."); }
-                  }}
-                  style={{flex:2,padding:"6px 0",borderRadius:7,border:"none",background:"#dc2626",color:"white",fontSize:10,fontWeight:800,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}
-                >Confirm Reset</button>
-              </div>
-            </div>
-          )}
+          {/* Logout button */}
+          <button
+            onClick={()=>{
+              setLoggedIn(false);
+              setProfile(null);
+              setAssets([]);
+              setLiabs([]);
+              setConnected({});
+              setExpenses(INIT_EXPENSES);
+              setDone([]);
+              setScreen("home");
+            }}
+            style={{width:"100%",padding:"7px 11px",borderRadius:9,border:"1px solid rgba(255,255,255,0.18)",background:"rgba(255,255,255,0.07)",color:"rgba(255,255,255,0.6)",fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"'Sora',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all 0.2s"}}
+            onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.15)";e.currentTarget.style.color="white";}}
+            onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.07)";e.currentTarget.style.color="rgba(255,255,255,0.6)";}}
+          >
+            <span style={{fontSize:12}}>⎋</span> Log Out
+          </button>
         </div>
       </div>
 
@@ -1962,27 +2061,27 @@ export default function App() {
                     {scenario==="crash"&&[{l:"Equity drop",k:"equityDrop",min:5,max:60,step:5,u:"%"},{l:"Crypto drop",k:"cryptoDrop",min:10,max:90,step:10,u:"%"}].map(sl=>(
                       <div key={sl.k} style={{marginBottom:12}}>
                         <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:10,fontWeight:700,color:sub}}>{sl.l}</span><strong style={{fontSize:11,color:sd.color}}>{params.crash[sl.k]}{sl.u}</strong></div>
-                        <input type="range" min={sl.min} max={sl.max} step={sl.step} value={params.crash[sl.k]} onChange={e=>setParams(p=>({...p,crash:{...p.crash,[sl.k]:+e.target.value}}))} style={{width:"100%",accentColor:sd.color}}/>
+                        <input type="range" min={sl.min} max={sl.max} step={sl.step} value={params.crash[sl.k]} onChange={e=>setParams(p=>({...p,crash:{...p.crash,[sl.k]:+e.target.value}}))} style={{width:"100%",accentColor:sd.color,color:sd.color,background:`linear-gradient(to right, ${sd.color} ${((params.crash[sl.k]-sl.min)/(sl.max-sl.min))*100}%, #e2e8f0 ${((params.crash[sl.k]-sl.min)/(sl.max-sl.min))*100}%)`}}/>
                       </div>
                     ))}
                     {scenario==="jobloss"&&<div>
                       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:10,fontWeight:700,color:sub}}>Months without income</span><strong style={{fontSize:11,color:sd.color}}>{params.jobloss.months} mo.</strong></div>
-                      <input type="range" min={1} max={24} value={params.jobloss.months} onChange={e=>setParams(p=>({...p,jobloss:{months:+e.target.value}}))} style={{width:"100%",accentColor:sd.color}}/>
+                      <input type="range" min={1} max={24} value={params.jobloss.months} onChange={e=>setParams(p=>({...p,jobloss:{months:+e.target.value}}))} style={{width:"100%",accentColor:sd.color,color:sd.color,background:`linear-gradient(to right, ${sd.color} ${((params.jobloss.months-1)/(24-1))*100}%, #e2e8f0 ${((params.jobloss.months-1)/(24-1))*100}%)`}}/>
                       <div style={{marginTop:9,background:`${sd.color}12`,borderRadius:7,padding:"7px 9px",fontSize:10,fontWeight:700,color:sd.color}}>Monthly salary: <strong>{fc(profile.salary||0,cur)}</strong></div>
                     </div>}
                     {scenario==="rates"&&<div>
                       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:10,fontWeight:700,color:sub}}>Rate increase</span><strong style={{fontSize:11,color:sd.color}}>{params.rates.hikePct}%</strong></div>
-                      <input type="range" min={0.25} max={5} step={0.25} value={params.rates.hikePct} onChange={e=>setParams(p=>({...p,rates:{hikePct:+e.target.value}}))} style={{width:"100%",accentColor:sd.color}}/>
+                      <input type="range" min={0.25} max={5} step={0.25} value={params.rates.hikePct} onChange={e=>setParams(p=>({...p,rates:{hikePct:+e.target.value}}))} style={{width:"100%",accentColor:sd.color,color:sd.color,background:`linear-gradient(to right, ${sd.color} ${((params.rates.hikePct-0.25)/(5-0.25))*100}%, #e2e8f0 ${((params.rates.hikePct-0.25)/(5-0.25))*100}%)`}}/>
                     </div>}
                     {scenario==="retirement"&&[{l:"Years to retirement",k:"years",min:5,max:40,fmt:v=>`${v} yrs`},{l:`Monthly savings (${cur.code})`,k:"monthly",min:100,max:5000,step:100,fmt:v=>fc(v,cur,true)}].map(sl=>(
                       <div key={sl.k} style={{marginBottom:12}}>
                         <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:10,fontWeight:700,color:sub}}>{sl.l}</span><strong style={{fontSize:11,color:sd.color}}>{sl.fmt(params.retirement[sl.k])}</strong></div>
-                        <input type="range" min={sl.min||5} max={sl.max} step={sl.step||1} value={params.retirement[sl.k]} onChange={e=>setParams(p=>({...p,retirement:{...p.retirement,[sl.k]:+e.target.value}}))} style={{width:"100%",accentColor:sd.color}}/>
+                        <input type="range" min={sl.min||5} max={sl.max} step={sl.step||1} value={params.retirement[sl.k]} onChange={e=>setParams(p=>({...p,retirement:{...p.retirement,[sl.k]:+e.target.value}}))} style={{width:"100%",accentColor:sd.color,color:sd.color,background:`linear-gradient(to right, ${sd.color} ${((params.retirement[sl.k]-(sl.min||5))/(sl.max-(sl.min||5)))*100}%, #e2e8f0 ${((params.retirement[sl.k]-(sl.min||5))/(sl.max-(sl.min||5)))*100}%)`}}/>
                       </div>
                     ))}
                     {scenario==="property"&&<div>
                       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:10,fontWeight:700,color:sub}}>Property price</span><strong style={{fontSize:11,color:sd.color}}>{fc(params.property.price,cur,true)}</strong></div>
-                      <input type="range" min={300000} max={3000000} step={50000} value={params.property.price} onChange={e=>setParams(p=>({...p,property:{price:+e.target.value}}))} style={{width:"100%",accentColor:sd.color}}/>
+                      <input type="range" min={300000} max={3000000} step={50000} value={params.property.price} onChange={e=>setParams(p=>({...p,property:{price:+e.target.value}}))} style={{width:"100%",accentColor:sd.color,color:sd.color,background:`linear-gradient(to right, ${sd.color} ${((params.property.price-300000)/(3000000-300000))*100}%, #e2e8f0 ${((params.property.price-300000)/(3000000-300000))*100}%)`}}/>
                     </div>}
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -2141,13 +2240,49 @@ export default function App() {
               </div>
               <div className="hov" style={{background:"#fff1f0",borderRadius:14,padding:18,border:"1px solid #fecaca",transition:"all .3s"}}>
                 <div style={{fontSize:13,fontWeight:800,color:"#7f1d1d",marginBottom:9}}>⚠️ Data Control</div>
-                <div style={{display:"flex",gap:11,alignItems:"center"}}>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:11,fontWeight:700,color:"#1a0505",marginBottom:3}}>Reset & Clear All Data</div>
-                    <div style={{fontSize:10,color:"#7f1d1d"}}>Permanently delete your profile, assets, and settings. Returns you to onboarding. This cannot be undone.</div>
+                {!showResetConfirm ? (
+                  <div style={{display:"flex",gap:11,alignItems:"center"}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:11,fontWeight:700,color:"#1a0505",marginBottom:3}}>Delete Account & All Data</div>
+                      <div style={{fontSize:10,color:"#7f1d1d"}}>Permanently delete your profile, assets, and all settings. This cannot be undone. You will be returned to the main page.</div>
+                    </div>
+                    <button onClick={()=>{setShowResetConfirm(true);setResetPwInput("");setResetPwError("");}} style={{padding:"9px 20px",background:"#dc2626",color:"white",border:"none",borderRadius:10,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif",flexShrink:0}}>Delete Account</button>
                   </div>
-                  <button onClick={resetApp} style={{padding:"9px 20px",background:"#dc2626",color:"white",border:"none",borderRadius:10,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif",flexShrink:0}}>Reset App</button>
-                </div>
+                ) : (
+                  <div>
+                    <div style={{fontSize:11,fontWeight:700,color:"#7f1d1d",marginBottom:6}}>🔒 Confirm account deletion</div>
+                    <div style={{fontSize:10,color:"#7f1d1d",marginBottom:12}}>Enter your password to permanently delete your account and all data. This cannot be undone.</div>
+                    <input
+                      type="password"
+                      value={resetPwInput}
+                      onChange={e=>{setResetPwInput(e.target.value);setResetPwError("");}}
+                      placeholder="Your password"
+                      style={{width:"100%",padding:"9px 12px",borderRadius:9,border:`1px solid ${resetPwError?"#dc2626":"#fca5a5"}`,background:"white",color:"#111827",fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",marginBottom:8,boxSizing:"border-box"}}
+                    />
+                    {resetPwError&&<div style={{fontSize:10,color:"#dc2626",fontWeight:600,marginBottom:8}}>{resetPwError}</div>}
+                    <div style={{display:"flex",gap:8}}>
+                      <button
+                        onClick={()=>{setShowResetConfirm(false);setResetPwInput("");setResetPwError("");}}
+                        style={{flex:1,padding:"9px",borderRadius:9,border:"1px solid #fca5a5",background:"transparent",color:"#7f1d1d",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}
+                      >Cancel</button>
+                      <button
+                        onClick={()=>{
+                          const stored = profile?.passwordHash;
+                          const entered = btoa(unescape(encodeURIComponent(resetPwInput)));
+                          if(!stored){ localStorage.removeItem(STORAGE_KEY); setLoggedIn(false); setOnboarded(false); setProfile(null); setAssets([]); setLiabs([]); return; }
+                          if(entered===stored){
+                            localStorage.removeItem(STORAGE_KEY);
+                            setLoggedIn(false); setOnboarded(false); setProfile(null);
+                            setAssets([]); setLiabs([]); setConnected({}); setExpenses(INIT_EXPENSES); setDone([]);
+                            setShowResetConfirm(false); setResetPwInput(""); setResetPwError("");
+                            setScreen("home");
+                          } else { setResetPwError("Incorrect password. Try again."); }
+                        }}
+                        style={{flex:2,padding:"9px",borderRadius:9,border:"none",background:"#dc2626",color:"white",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}
+                      >Delete My Account</button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
