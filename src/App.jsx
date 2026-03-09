@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 
 // ─── STORAGE KEY ─────────────────────────────────────────────────────────────
 const STORAGE_KEY = "wealthwell_v1";
@@ -995,6 +995,254 @@ const buildActionsForScenario = (scenarioId, baseActions) => {
   return [...matched, ...unmatched].map((a, i) => ({ ...a, priority: i + 1 }));
 };
 
+// ─── ADD ASSET PANEL (standalone — uncontrolled refs, no per-keystroke re-render) ───
+function AddAssetPanel({ onAdd, onClose, cur, accentPrimary, card, bdr, txt, sub }) {
+  const nameRef  = React.useRef();
+  const instRef  = React.useRef();
+  const valRef   = React.useRef();
+  const [cat,    setCat]    = React.useState("Cash & Deposits");
+  const [error,  setError]  = React.useState("");
+  const [preview,setPreview]= React.useState(null);
+
+  // Live preview — only updates when value/category select changes
+  const refreshPreview = () => {
+    const v = parseFloat(valRef.current?.value);
+    setPreview(isNaN(v)||v<=0 ? null : v);
+  };
+
+  const handleSubmit = () => {
+    const name = nameRef.current?.value?.trim();
+    const val  = parseFloat(valRef.current?.value);
+    if (!name)        { setError("Please enter an asset name."); nameRef.current?.focus(); return; }
+    if (!val || val<=0){ setError("Please enter a value greater than 0."); valRef.current?.focus(); return; }
+    onAdd({
+      name, category: cat,
+      value: val / cur.rate,
+      institution: instRef.current?.value?.trim() || "Manual Entry",
+    });
+  };
+
+  const catColor = ASSET_COLORS[cat] || "#94a3b8";
+  const catIcon  = ASSET_ICONS[cat]  || "💼";
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:card,borderRadius:22,width:480,border:`1px solid ${bdr}`,animation:"fadeUp 0.28s ease",boxShadow:"0 24px 64px rgba(0,0,0,0.18)",overflow:"hidden",fontFamily:"'Sora',sans-serif"}}>
+
+        {/* Header strip */}
+        <div style={{background:`linear-gradient(135deg,${catColor}22,${catColor}08)`,padding:"20px 24px 16px",borderBottom:`1px solid ${catColor}33`}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:44,height:44,borderRadius:12,background:`${catColor}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,border:`2px solid ${catColor}44`}}>
+              {catIcon}
+            </div>
+            <div>
+              <div style={{fontSize:16,fontWeight:800,color:txt}}>Add New Asset</div>
+              <div style={{fontSize:10,color:sub,marginTop:1}}>Value in {cur.code} · {cur.flag}</div>
+            </div>
+            <button onClick={onClose} style={{marginLeft:"auto",background:"none",border:"none",fontSize:20,cursor:"pointer",color:sub,lineHeight:1}}>×</button>
+          </div>
+        </div>
+
+        <div style={{padding:"20px 24px 24px"}}>
+          {/* Category picker — visual chips */}
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:10,fontWeight:700,color:sub,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Category</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {ASSET_CATS.map(c=>(
+                <button key={c} onClick={()=>setCat(c)}
+                  style={{padding:"5px 11px",borderRadius:99,border:`1.5px solid ${cat===c?(ASSET_COLORS[c]||"#94a3b8"):"#e2e8f0"}`,
+                    background:cat===c?`${ASSET_COLORS[c]||"#94a3b8"}18`:"white",
+                    color:cat===c?(ASSET_COLORS[c]||"#94a3b8"):sub,
+                    fontSize:10,fontWeight:cat===c?800:500,cursor:"pointer",
+                    fontFamily:"'Sora',sans-serif",transition:"all 0.15s",
+                    display:"flex",alignItems:"center",gap:4}}>
+                  <span style={{fontSize:11}}>{ASSET_ICONS[c]||"💼"}</span> {c}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Fields — native inputs with refs, zero re-render on typing */}
+          <div style={{marginBottom:12}}>
+            <label style={{display:"block",fontSize:10,fontWeight:700,color:sub,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Asset Name *</label>
+            <input ref={nameRef} defaultValue="" placeholder="e.g. S&P 500 ETF, DBS Savings, Gold Bar..."
+              onChange={()=>setError("")}
+              style={{width:"100%",padding:"10px 13px",borderRadius:10,border:`1.5px solid ${bdr}`,background:"#f8fafc",color:txt,fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",boxSizing:"border-box"}}/>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+            <div>
+              <label style={{display:"block",fontSize:10,fontWeight:700,color:sub,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Value ({cur.code}) *</label>
+              <div style={{position:"relative"}}>
+                <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",fontSize:12,fontWeight:700,color:catColor}}>{cur.symbol}</span>
+                <input ref={valRef} type="number" min="0" defaultValue="" placeholder="0.00"
+                  onChange={refreshPreview}
+                  style={{width:"100%",padding:"10px 13px 10px 30px",borderRadius:10,border:`1.5px solid ${bdr}`,background:"#f8fafc",color:txt,fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",boxSizing:"border-box"}}/>
+              </div>
+            </div>
+            <div>
+              <label style={{display:"block",fontSize:10,fontWeight:700,color:sub,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Institution</label>
+              <input ref={instRef} defaultValue="" placeholder="e.g. DBS, IBKR, Manual..."
+                style={{width:"100%",padding:"10px 13px",borderRadius:10,border:`1.5px solid ${bdr}`,background:"#f8fafc",color:txt,fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",boxSizing:"border-box"}}/>
+            </div>
+          </div>
+
+          {/* Live preview pill */}
+          {preview&&(
+            <div style={{background:`${catColor}12`,border:`1px solid ${catColor}33`,borderRadius:10,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:16}}>{catIcon}</span>
+              <div style={{flex:1}}>
+                <div style={{fontSize:10,color:catColor,fontWeight:700}}>Preview</div>
+                <div style={{fontSize:12,fontWeight:800,color:txt}}>{cur.symbol}{(preview).toLocaleString("en-SG",{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+              </div>
+              <div style={{fontSize:10,color:sub}}>{cat}</div>
+            </div>
+          )}
+
+          {error&&<div style={{fontSize:10,color:"#ef4444",fontWeight:600,marginBottom:10,padding:"8px 12px",background:"#fff1f0",borderRadius:8,border:"1px solid #fca5a5"}}>{error}</div>}
+
+          <div style={{display:"flex",gap:10}}>
+            <button onClick={onClose} style={{flex:1,padding:"11px",background:"transparent",border:`1.5px solid ${bdr}`,borderRadius:10,color:sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif",transition:"all 0.15s"}}>Cancel</button>
+            <button onClick={handleSubmit}
+              style={{flex:2,padding:"11px",background:`linear-gradient(135deg,${accentPrimary},#10b981)`,color:"white",border:"none",borderRadius:10,fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"'Sora',sans-serif",boxShadow:`0 4px 14px ${accentPrimary}44`,transition:"all 0.15s"}}>
+              ＋ Add Asset
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ADD LIABILITY PANEL (standalone — uncontrolled refs) ────────────────────
+function AddLiabPanel({ onAdd, onClose, cur, card, bdr, txt, sub }) {
+  const nameRef    = React.useRef();
+  const instRef    = React.useRef();
+  const totalRef   = React.useRef();
+  const monthlyRef = React.useRef();
+  const [cat,      setCat]    = React.useState("Mortgage");
+  const [error,    setError]  = React.useState("");
+  const [preview,  setPreview]= React.useState(null);
+
+  const LIAB_ICONS = {"Mortgage":"🏠","Personal Loan":"🏦","Credit Card":"💳","Car Loan":"🚗","Business Loan":"🏢","Student Loan":"📚","Other":"📋"};
+  const LIAB_COLORS= {"Mortgage":"#ef4444","Personal Loan":"#f43f5e","Credit Card":"#f97316","Car Loan":"#fb923c","Business Loan":"#dc2626","Student Loan":"#fbbf24","Other":"#94a3b8"};
+  const catColor   = LIAB_COLORS[cat] || "#ef4444";
+  const catIcon    = LIAB_ICONS[cat]  || "📋";
+
+  const refreshPreview = () => {
+    const v = parseFloat(totalRef.current?.value);
+    setPreview(isNaN(v)||v<=0 ? null : v);
+  };
+
+  const handleSubmit = () => {
+    const name  = nameRef.current?.value?.trim();
+    const total = parseFloat(totalRef.current?.value);
+    if (!name)          { setError("Please enter a liability name."); nameRef.current?.focus(); return; }
+    if (!total||total<=0){ setError("Please enter a total amount greater than 0."); totalRef.current?.focus(); return; }
+    onAdd({
+      name, category: cat,
+      value:   total / cur.rate,
+      monthly: parseFloat(monthlyRef.current?.value)||0,
+      institution: instRef.current?.value?.trim() || "Manual Entry",
+    });
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:card,borderRadius:22,width:480,border:`1px solid ${bdr}`,animation:"fadeUp 0.28s ease",boxShadow:"0 24px 64px rgba(0,0,0,0.18)",overflow:"hidden",fontFamily:"'Sora',sans-serif"}}>
+
+        {/* Header strip */}
+        <div style={{background:`linear-gradient(135deg,${catColor}18,${catColor}06)`,padding:"20px 24px 16px",borderBottom:`1px solid ${catColor}33`}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:44,height:44,borderRadius:12,background:`${catColor}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,border:`2px solid ${catColor}44`}}>
+              {catIcon}
+            </div>
+            <div>
+              <div style={{fontSize:16,fontWeight:800,color:txt}}>Add New Liability</div>
+              <div style={{fontSize:10,color:sub,marginTop:1}}>Value in {cur.code} · {cur.flag}</div>
+            </div>
+            <button onClick={onClose} style={{marginLeft:"auto",background:"none",border:"none",fontSize:20,cursor:"pointer",color:sub,lineHeight:1}}>×</button>
+          </div>
+        </div>
+
+        <div style={{padding:"20px 24px 24px"}}>
+          {/* Category picker */}
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:10,fontWeight:700,color:sub,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Liability Type</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {LIAB_CATS.map(c=>(
+                <button key={c} onClick={()=>setCat(c)}
+                  style={{padding:"5px 11px",borderRadius:99,border:`1.5px solid ${cat===c?(LIAB_COLORS[c]||"#ef4444"):"#e2e8f0"}`,
+                    background:cat===c?`${LIAB_COLORS[c]||"#ef4444"}18`:"white",
+                    color:cat===c?(LIAB_COLORS[c]||"#ef4444"):sub,
+                    fontSize:10,fontWeight:cat===c?800:500,cursor:"pointer",
+                    fontFamily:"'Sora',sans-serif",transition:"all 0.15s",
+                    display:"flex",alignItems:"center",gap:4}}>
+                  <span style={{fontSize:11}}>{LIAB_ICONS[c]||"📋"}</span> {c}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Name */}
+          <div style={{marginBottom:12}}>
+            <label style={{display:"block",fontSize:10,fontWeight:700,color:sub,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Liability Name *</label>
+            <input ref={nameRef} defaultValue="" placeholder="e.g. HDB Mortgage, OCBC Car Loan..."
+              onChange={()=>setError("")}
+              style={{width:"100%",padding:"10px 13px",borderRadius:10,border:`1.5px solid ${bdr}`,background:"#f8fafc",color:txt,fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",boxSizing:"border-box"}}/>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12}}>
+            <div>
+              <label style={{display:"block",fontSize:10,fontWeight:700,color:sub,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Total ({cur.code}) *</label>
+              <div style={{position:"relative"}}>
+                <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:11,fontWeight:700,color:"#ef4444"}}>{cur.symbol}</span>
+                <input ref={totalRef} type="number" min="0" defaultValue="" placeholder="0"
+                  onChange={refreshPreview}
+                  style={{width:"100%",padding:"10px 10px 10px 26px",borderRadius:10,border:`1.5px solid ${bdr}`,background:"#f8fafc",color:txt,fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",boxSizing:"border-box"}}/>
+              </div>
+            </div>
+            <div>
+              <label style={{display:"block",fontSize:10,fontWeight:700,color:sub,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Monthly ({cur.code})</label>
+              <div style={{position:"relative"}}>
+                <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:11,fontWeight:700,color:"#f97316"}}>{cur.symbol}</span>
+                <input ref={monthlyRef} type="number" min="0" defaultValue="" placeholder="0"
+                  style={{width:"100%",padding:"10px 10px 10px 26px",borderRadius:10,border:`1.5px solid ${bdr}`,background:"#f8fafc",color:txt,fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",boxSizing:"border-box"}}/>
+              </div>
+            </div>
+            <div>
+              <label style={{display:"block",fontSize:10,fontWeight:700,color:sub,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Institution</label>
+              <input ref={instRef} defaultValue="" placeholder="e.g. DBS, OCBC"
+                style={{width:"100%",padding:"10px 10px",borderRadius:10,border:`1.5px solid ${bdr}`,background:"#f8fafc",color:txt,fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",boxSizing:"border-box"}}/>
+            </div>
+          </div>
+
+          {/* Live preview */}
+          {preview&&(
+            <div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:10,padding:"10px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:16}}>{catIcon}</span>
+              <div style={{flex:1}}>
+                <div style={{fontSize:10,color:"#dc2626",fontWeight:700}}>Preview · {cat}</div>
+                <div style={{fontSize:12,fontWeight:800,color:"#ef4444"}}>−{cur.symbol}{(preview).toLocaleString("en-SG",{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+              </div>
+            </div>
+          )}
+
+          {error&&<div style={{fontSize:10,color:"#ef4444",fontWeight:600,marginBottom:10,padding:"8px 12px",background:"#fff1f0",borderRadius:8,border:"1px solid #fca5a5"}}>{error}</div>}
+
+          <div style={{display:"flex",gap:10}}>
+            <button onClick={onClose} style={{flex:1,padding:"11px",background:"transparent",border:`1.5px solid ${bdr}`,borderRadius:10,color:sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>Cancel</button>
+            <button onClick={handleSubmit}
+              style={{flex:2,padding:"11px",background:"linear-gradient(135deg,#ef4444,#f97316)",color:"white",border:"none",borderRadius:10,fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"'Sora',sans-serif",boxShadow:"0 4px 14px rgba(239,68,68,0.35)"}}>
+              ＋ Add Liability
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── NAV ──────────────────────────────────────────────────────────────────────
 const NAV = [
   {id:"home",      label:"Home",         icon:"⬡"},
@@ -1155,20 +1403,18 @@ export default function App() {
   const sd     = SCENARIOS_DEF.find(s=>s.id===scenario);
 
   // ── Asset / Liability CRUD ──
-  const addAsset = () => {
-    if (!newA.name || !newA.value) return;
-    setAssets(a=>[...a,{id:Date.now(),name:newA.name,category:newA.category,
-      value:parseFloat(newA.value)/cur.rate, color:ASSET_COLORS[newA.category]||"#94a3b8",
-      icon:ASSET_ICONS[newA.category]||"💼", institution:newA.institution||"Manual Entry",change:0}]);
-    setNewA({name:"",category:"Cash & Deposits",value:"",institution:""});
+  const addAsset = ({ name, category, value, institution }) => {
+    setAssets(a=>[...a,{id:Date.now(), name, category,
+      value, color:ASSET_COLORS[category]||"#94a3b8",
+      icon:ASSET_ICONS[category]||"💼", institution, change:0}]);
+    setAddAssetOpen(false);
     setAddAssetOpen(false);
   };
-  const addLiab = () => {
-    if (!newL.name || !newL.value) return;
-    setLiabs(l=>[...l,{id:Date.now(),name:newL.name,category:newL.category,
-      value:parseFloat(newL.value)/cur.rate, color:"#ef4444",
-      monthly:parseFloat(newL.monthly)||0, institution:newL.institution||"Manual Entry"}]);
-    setNewL({name:"",category:"Mortgage",value:"",monthly:"",institution:""});
+  const addLiab = ({ name, category, value, monthly, institution }) => {
+    setLiabs(l=>[...l,{id:Date.now(), name, category,
+      value, color:"#ef4444",
+      monthly, institution}]);
+    setAddLiabOpen(false);
     setAddLiabOpen(false);
   };
   const markDone = id => {
@@ -1498,7 +1744,7 @@ export default function App() {
                       style={{padding:"6px 16px",borderRadius:7,border:"none",fontSize:10,fontWeight:700,
                         fontFamily:"'Sora',sans-serif",cursor:"pointer",transition:"all 0.2s",
                         background:(m==="Pro")===pro?"rgba(255,255,255,0.9)":"transparent",
-                        color:(m==="Pro")===pro?"#1d4ed8":"rgba(255,255,255,0.7)"}}>
+                        color:(m==="Pro")===pro?"#dc2626":"rgba(255,255,255,0.7)"}}>
                       {m==="Pro"?"⬡ Pro":"◎ Investor"}
                     </button>
                   ))}
@@ -1520,25 +1766,25 @@ export default function App() {
               {pro&&(
                 <>
                   {/* Bloomberg Pro analytics panel */}
-                  <div style={{background:"linear-gradient(135deg,#0f172a,#1e293b)",borderRadius:15,padding:20,border:"1px solid #334155",marginBottom:11}}>
+                  <div style={{background:"linear-gradient(135deg,#1a0505,#2d0808)",borderRadius:15,padding:20,border:"1px solid #7f1d1d",marginBottom:11}}>
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
-                      <div style={{background:"linear-gradient(135deg,#1d4ed8,#6366f1)",borderRadius:5,padding:"2px 9px",fontSize:9,fontWeight:800,color:"white",letterSpacing:1}}>⬡ PRO</div>
-                      <div style={{fontSize:12,fontWeight:800,color:"#f1f5f9"}}>Advanced Risk & Performance Analytics</div>
-                      <div style={{fontSize:9,color:"#94a3b8",marginLeft:"auto"}}>Hover metrics for explanation</div>
+                      <div style={{background:"linear-gradient(135deg,#dc2626,#9f1239)",borderRadius:5,padding:"2px 9px",fontSize:9,fontWeight:800,color:"white",letterSpacing:1}}>⬡ PRO</div>
+                      <div style={{fontSize:12,fontWeight:800,color:"#fef2f2"}}>Advanced Risk & Performance Analytics</div>
+                      <div style={{fontSize:9,color:"#fca5a5",marginLeft:"auto"}}>Hover metrics for explanation</div>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
                       {PRO_METRICS.map((m,i)=>(
                         <div key={i} onMouseEnter={()=>setHovTooltip(i)} onMouseLeave={()=>setHovTooltip(null)}
-                          style={{background:"#0f172a",borderRadius:10,padding:12,border:"1px solid",cursor:"default",position:"relative",transition:"border-color 0.2s",borderColor:hovTooltip===i?"#6366f1":"#1e293b"}}>
-                          <div style={{fontSize:8,color:"#94a3b8",fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.7}}>{m.label}</div>
+                          style={{background:"#0f0000",borderRadius:10,padding:12,border:"1px solid",cursor:"default",position:"relative",transition:"border-color 0.2s",borderColor:hovTooltip===i?"#dc2626":"#3d0a0a"}}>
+                          <div style={{fontSize:8,color:"#fca5a5",fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.7}}>{m.label}</div>
                           <div style={{fontSize:18,fontWeight:800,color:m.color,fontFamily:"'Courier New',monospace"}}>{m.value}</div>
-                          <div style={{fontSize:8,color:"#475569",marginTop:3,fontWeight:600}}>{m.sub}</div>
+                          <div style={{fontSize:8,color:"#7f1d1d",marginTop:3,fontWeight:600}}>{m.sub}</div>
                           {m.good===true&&<div style={{position:"absolute",top:7,right:8,width:6,height:6,borderRadius:"50%",background:"#10b981"}}/>}
                           {m.good===false&&<div style={{position:"absolute",top:7,right:8,width:6,height:6,borderRadius:"50%",background:"#ef4444"}}/>}
                           {hovTooltip===i&&(
-                            <div style={{position:"absolute",bottom:"110%",left:"50%",transform:"translateX(-50%)",background:"#0f172a",border:"1px solid #6366f1",borderRadius:8,padding:"8px 11px",fontSize:10,color:"#f1f5f9",lineHeight:1.5,width:200,zIndex:50,boxShadow:"0 8px 24px rgba(0,0,0,0.5)"}}>
+                            <div style={{position:"absolute",bottom:"110%",left:"50%",transform:"translateX(-50%)",background:"#1a0505",border:"1px solid #dc2626",borderRadius:8,padding:"8px 11px",fontSize:10,color:"#fef2f2",lineHeight:1.5,width:200,zIndex:50,boxShadow:"0 8px 24px rgba(0,0,0,0.5)"}}>
                               {m.tooltip}
-                              <div style={{position:"absolute",top:"100%",left:"50%",transform:"translateX(-50%)",border:"5px solid transparent",borderTopColor:"#6366f1"}}/>
+                              <div style={{position:"absolute",top:"100%",left:"50%",transform:"translateX(-50%)",border:"5px solid transparent",borderTopColor:"#dc2626"}}/>
                             </div>
                           )}
                         </div>
@@ -1558,12 +1804,12 @@ export default function App() {
                     const savingsRate = Math.max(0,Math.round((1-(profile.monthlyExpenses||0)/(profile.salary||1))*100));
                     const monthlySavings = Math.max(0,(profile.salary||0)-(profile.monthlyExpenses||0));
                     return (
-                      <div style={{background:"white",borderRadius:15,padding:24,border:"2px solid #1d4ed8",marginBottom:11,fontFamily:"'Sora',sans-serif"}}>
+                      <div style={{background:"white",borderRadius:15,padding:24,border:"2px solid #dc2626",marginBottom:11,fontFamily:"'Sora',sans-serif"}}>
                         {/* Header */}
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,paddingBottom:14,borderBottom:"2px solid #1d4ed8"}}>
                           <div>
                             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                              <div style={{background:"linear-gradient(135deg,#1d4ed8,#6366f1)",borderRadius:5,padding:"2px 9px",fontSize:9,fontWeight:800,color:"white",letterSpacing:1}}>⬡ PRO</div>
+                              <div style={{background:"linear-gradient(135deg,#dc2626,#9f1239)",borderRadius:5,padding:"2px 9px",fontSize:9,fontWeight:800,color:"white",letterSpacing:1}}>⬡ PRO</div>
                               <span style={{fontSize:10,fontWeight:700,color:"#64748b",letterSpacing:1,textTransform:"uppercase"}}>Statement of Financial Position</span>
                             </div>
                             <div style={{fontSize:20,fontWeight:800,color:"#0f172a"}}>{profile.name||"WealthWell User"}</div>
@@ -1572,7 +1818,7 @@ export default function App() {
                           <div style={{textAlign:"right"}}>
                             <div style={{fontSize:10,color:"#64748b",marginBottom:2}}>Net Worth</div>
                             <div style={{fontSize:26,fontWeight:800,color:netWorth>=0?"#10b981":"#ef4444"}}>{fc(netWorth,cur)}</div>
-                            <div style={{fontSize:9,color:"#64748b"}}>Wellness Score: <strong style={{color:"#1d4ed8"}}>{wellness}/100</strong></div>
+                            <div style={{fontSize:9,color:"#64748b"}}>Wellness Score: <strong style={{color:"#dc2626"}}>{wellness}/100</strong></div>
                           </div>
                         </div>
 
@@ -1618,8 +1864,8 @@ export default function App() {
                               <span style={{fontSize:11,fontWeight:800,color:"#ef4444"}}>TOTAL LIABILITIES</span>
                               <span style={{fontSize:12,fontWeight:800,color:"#ef4444",fontFamily:"'Courier New',monospace"}}>({fc(totalL,cur)})</span>
                             </div>
-                            <div style={{display:"flex",justifyContent:"space-between",marginTop:8,paddingTop:8,borderTop:"2px solid #1d4ed8",background:"#eff6ff",borderRadius:6,padding:"8px 10px",marginTop:10}}>
-                              <span style={{fontSize:11,fontWeight:800,color:"#1d4ed8"}}>NET WORTH (EQUITY)</span>
+                            <div style={{display:"flex",justifyContent:"space-between",marginTop:8,paddingTop:8,borderTop:"2px solid #1d4ed8",background:"#fff5f5",borderRadius:6,padding:"8px 10px",marginTop:10}}>
+                              <span style={{fontSize:11,fontWeight:800,color:"#dc2626"}}>NET WORTH (EQUITY)</span>
                               <span style={{fontSize:12,fontWeight:800,color:netWorth>=0?"#10b981":"#ef4444",fontFamily:"'Courier New',monospace"}}>{fc(netWorth,cur)}</span>
                             </div>
                           </div>
@@ -1998,47 +2244,25 @@ export default function App() {
         </div>
       )}
 
-      {/* ══ ADD ASSET MODAL ══ */}
+      {/* ══ ADD ASSET PANEL ══ */}
       {addAssetOpen&&(
-        <Modal title="Add New Asset" subtitle={`Enter value in ${cur.code}`} onClose={()=>setAddAssetOpen(false)}>
-          <Inp label="Asset Name" value={newA.name} onChange={v=>setNewA(a=>({...a,name:v}))} placeholder="e.g. S&P 500 ETF, Gold Bar..."/>
-          <Inp label="Institution / Source" value={newA.institution} onChange={v=>setNewA(a=>({...a,institution:v}))} placeholder="e.g. Interactive Brokers, Manual Entry"/>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
-            <div style={{marginBottom:11}}>
-              <Lbl>Category</Lbl>
-              <select value={newA.category} onChange={e=>setNewA(a=>({...a,category:e.target.value}))} style={{width:"100%",padding:"9px 11px",borderRadius:9,border:"1px solid #e2e8f0",background:"#f8fafc",color:"#0f172a",fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none"}}>
-                {ASSET_CATS.map(c=><option key={c}>{c}</option>)}
-              </select>
-            </div>
-            <Inp label={`Value (${cur.code})`} value={newA.value} onChange={v=>setNewA(a=>({...a,value:v}))} type="number" placeholder="0"/>
-          </div>
-          <div style={{display:"flex",gap:8,marginTop:4}}>
-            <button onClick={()=>setAddAssetOpen(false)} style={{flex:1,padding:"9px",background:"transparent",border:`1px solid ${bdr}`,borderRadius:9,color:sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>Cancel</button>
-            <button onClick={addAsset} style={{flex:2,padding:"9px",background:`linear-gradient(135deg,${accentPrimary},#10b981)`,color:"white",border:"none",borderRadius:9,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>Add Asset</button>
-          </div>
-        </Modal>
+        <AddAssetPanel
+          onAdd={addAsset}
+          onClose={()=>setAddAssetOpen(false)}
+          cur={cur}
+          accentPrimary={accentPrimary}
+          card={card} bdr={bdr} txt={txt} sub={sub}
+        />
       )}
 
-      {/* ══ ADD LIABILITY MODAL ══ */}
+      {/* ══ ADD LIABILITY PANEL ══ */}
       {addLiabOpen&&(
-        <Modal title="Add New Liability" subtitle={`Enter value in ${cur.code}`} onClose={()=>setAddLiabOpen(false)}>
-          <Inp label="Liability Name" value={newL.name} onChange={v=>setNewL(l=>({...l,name:v}))} placeholder="e.g. Car Loan, Student Loan..."/>
-          <Inp label="Institution" value={newL.institution} onChange={v=>setNewL(l=>({...l,institution:v}))} placeholder="e.g. OCBC, DBS..."/>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-            <div>
-              <Lbl>Type</Lbl>
-              <select value={newL.category} onChange={e=>setNewL(l=>({...l,category:e.target.value}))} style={{width:"100%",padding:"8px 9px",borderRadius:9,border:"1px solid #e2e8f0",background:"#f8fafc",color:"#0f172a",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none"}}>
-                {LIAB_CATS.map(c=><option key={c}>{c}</option>)}
-              </select>
-            </div>
-            <Inp label={`Total (${cur.code})`} value={newL.value} onChange={v=>setNewL(l=>({...l,value:v}))} type="number" placeholder="0"/>
-            <Inp label={`Monthly (${cur.code})`} value={newL.monthly} onChange={v=>setNewL(l=>({...l,monthly:v}))} type="number" placeholder="0"/>
-          </div>
-          <div style={{display:"flex",gap:8,marginTop:8}}>
-            <button onClick={()=>setAddLiabOpen(false)} style={{flex:1,padding:"9px",background:"transparent",border:`1px solid ${bdr}`,borderRadius:9,color:sub,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>Cancel</button>
-            <button onClick={addLiab} style={{flex:2,padding:"9px",background:"linear-gradient(135deg,#ef4444,#f97316)",color:"white",border:"none",borderRadius:9,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>Add Liability</button>
-          </div>
-        </Modal>
+        <AddLiabPanel
+          onAdd={addLiab}
+          onClose={()=>setAddLiabOpen(false)}
+          cur={cur}
+          card={card} bdr={bdr} txt={txt} sub={sub}
+        />
       )}
     </div>
   );
