@@ -379,15 +379,16 @@ function Flashcard({ action:a, onDone, cur }) {
 }
 
 // ─── LOGIN SCREEN ────────────────────────────────────────────────────────────
-function LoginScreen({ onLogin, onCreateAccount }) {
-  const [email, setEmail]         = useState("");
-  const [password, setPassword]   = useState("");
-  const [showPw, setShowPw]       = useState(false);
-  const [error, setError]         = useState("");
-  const [loading, setLoading]     = useState(false);
+function LoginScreen({ onLogin, onCreateAccount, hasAccount }) {
+  const [email, setEmail]       = useState("");
+  const [password, setPassword] = useState("");
+  const [showPw, setShowPw]     = useState(false);
+  const [error, setError]       = useState("");
+  const [loading, setLoading]   = useState(false);
 
   const handleLogin = () => {
     setError("");
+    if (!hasAccount) { setError("No account found. Please create an account first."); return; }
     if (!email.trim() || !password) { setError("Please enter your email and password."); return; }
     setLoading(true);
     setTimeout(() => {
@@ -396,10 +397,10 @@ function LoginScreen({ onLogin, onCreateAccount }) {
         if (saved) {
           const d = JSON.parse(saved);
           if (d.profile) {
-            const storedEmail = (d.profile.email || "").toLowerCase().trim();
+            const storedEmail  = (d.profile.email || "").toLowerCase().trim();
             const enteredEmail = email.toLowerCase().trim();
-            const storedHash = d.profile.passwordHash;
-            const enteredHash = btoa(unescape(encodeURIComponent(password)));
+            const storedHash   = d.profile.passwordHash;
+            const enteredHash  = btoa(unescape(encodeURIComponent(password)));
             if (storedEmail === enteredEmail && storedHash === enteredHash) {
               onLogin(d);
               return;
@@ -414,70 +415,114 @@ function LoginScreen({ onLogin, onCreateAccount }) {
     }, 500);
   };
 
-  const cardStyle = { background:"white", borderRadius:24, padding:"40px 44px",
-    width:"100%", maxWidth:440, boxShadow:"0 24px 64px rgba(0,0,0,0.12)",
-    border:"1px solid #fecaca", animation:"fadeUp 0.35s ease" };
-
   return (
     <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#fff5f5 0%,#fef2f2 50%,#fff1f1 100%)",
-      display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
-      padding:"24px 16px", fontFamily:"'Sora','Segoe UI',sans-serif" }}>
+      display:"flex", alignItems:"center", justifyContent:"center",
+      padding:"24px 16px", fontFamily:"'Sora','Segoe UI',sans-serif", position:"relative" }}>
       <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0;}
         @keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
         input:focus{border-color:#dc2626!important;outline:none!important;box-shadow:0 0 0 3px rgba(220,38,38,0.12)!important;}
       `}</style>
-      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:32 }}>
-        <div style={{ width:38, height:38, background:"linear-gradient(135deg,#dc2626,#991b1b)",
-          borderRadius:11, display:"flex", alignItems:"center", justifyContent:"center",
-          fontSize:18, boxShadow:"0 4px 14px rgba(220,38,38,0.35)" }}>⬡</div>
-        <div>
-          <div style={{ fontSize:18, fontWeight:800, color:"#1a0505" }}>WealthWell</div>
-          <div style={{ fontSize:10, color:"#9ca3af" }}>WEALTH WELLNESS HUB · SG</div>
-        </div>
+
+      {/* Create account — small button top-right corner */}
+      <div style={{ position:"absolute", top:20, right:24, display:"flex", alignItems:"center", gap:10 }}>
+        <span style={{ fontSize:11, color:"#9ca3af" }}>New to WealthWell?</span>
+        <button onClick={onCreateAccount}
+          style={{ padding:"7px 16px", borderRadius:99, border:"1.5px solid #dc2626",
+            background:"transparent", color:"#dc2626", fontSize:11, fontWeight:700,
+            cursor:"pointer", fontFamily:"'Sora',sans-serif", transition:"all 0.2s",
+            whiteSpace:"nowrap" }}
+          onMouseEnter={e=>{e.currentTarget.style.background="#fff5f5";}}
+          onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}>
+          Create Account →
+        </button>
       </div>
-      <div style={cardStyle}>
-        <h2 style={{ fontSize:22, fontWeight:800, color:"#1a0505", marginBottom:4 }}>Welcome back</h2>
-        <p style={{ fontSize:12, color:"#9ca3af", marginBottom:28 }}>Sign in to your WealthWell account</p>
-        <div style={{ marginBottom:14 }}>
+
+      {/* Main login card */}
+      <div style={{ background:"white", borderRadius:24, padding:"44px 48px", width:"100%", maxWidth:420,
+        boxShadow:"0 24px 64px rgba(0,0,0,0.12)", border:"1px solid #fecaca", animation:"fadeUp 0.35s ease" }}>
+
+        {/* Logo */}
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:30 }}>
+          <div style={{ width:40, height:40, background:"linear-gradient(135deg,#dc2626,#991b1b)",
+            borderRadius:12, display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:19, boxShadow:"0 4px 14px rgba(220,38,38,0.35)" }}>⬡</div>
+          <div>
+            <div style={{ fontSize:17, fontWeight:800, color:"#1a0505" }}>WealthWell</div>
+            <div style={{ fontSize:9, color:"#9ca3af", letterSpacing:.5 }}>WEALTH WELLNESS HUB · SG</div>
+          </div>
+        </div>
+
+        <h2 style={{ fontSize:22, fontWeight:800, color:"#1a0505", marginBottom:4 }}>
+          {hasAccount ? "Welcome back" : "Sign in"}
+        </h2>
+        <p style={{ fontSize:12, color:"#9ca3af", marginBottom:28, lineHeight:1.6 }}>
+          {hasAccount
+            ? "Enter your credentials to access your account."
+            : "Don't have an account yet? Click \"Create Account\" in the top-right corner to get started."}
+        </p>
+
+        <div style={{ marginBottom:14, opacity: hasAccount ? 1 : 0.45, pointerEvents: hasAccount ? "auto" : "none" }}>
           <label style={{ display:"block", fontSize:11, fontWeight:700, color:"#374151", marginBottom:5 }}>Email Address</label>
           <input type="email" value={email} onChange={e=>{setEmail(e.target.value);setError("");}}
             placeholder="you@example.com"
             onKeyDown={e=>e.key==="Enter"&&handleLogin()}
-            style={{ width:"100%", padding:"10px 14px", borderRadius:10, border:"1px solid #e5e7eb",
-              background:"white", color:"#111827", fontSize:13, fontFamily:"'Sora',sans-serif", outline:"none" }}/>
+            disabled={!hasAccount}
+            style={{ width:"100%", padding:"11px 14px", borderRadius:10, border:"1px solid #e5e7eb",
+              background: hasAccount ? "#fafafa" : "#f3f4f6", color:"#111827", fontSize:13,
+              fontFamily:"'Sora',sans-serif", outline:"none", transition:"border-color 0.2s" }}/>
         </div>
-        <div style={{ marginBottom:20 }}>
+
+        <div style={{ marginBottom:22, opacity: hasAccount ? 1 : 0.45, pointerEvents: hasAccount ? "auto" : "none" }}>
           <label style={{ display:"block", fontSize:11, fontWeight:700, color:"#374151", marginBottom:5 }}>Password</label>
           <div style={{ position:"relative" }}>
             <input type={showPw?"text":"password"} value={password} onChange={e=>{setPassword(e.target.value);setError("");}}
               placeholder="Enter your password"
               onKeyDown={e=>e.key==="Enter"&&handleLogin()}
-              style={{ width:"100%", padding:"10px 40px 10px 14px", borderRadius:10, border:"1px solid #e5e7eb",
-                background:"white", color:"#111827", fontSize:13, fontFamily:"'Sora',sans-serif", outline:"none" }}/>
-            <button onClick={()=>setShowPw(s=>!s)} style={{ position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:14,color:"#9ca3af" }}>{showPw?"🙈":"👁"}</button>
+              disabled={!hasAccount}
+              style={{ width:"100%", padding:"11px 42px 11px 14px", borderRadius:10, border:"1px solid #e5e7eb",
+                background: hasAccount ? "#fafafa" : "#f3f4f6", color:"#111827", fontSize:13,
+                fontFamily:"'Sora',sans-serif", outline:"none", transition:"border-color 0.2s" }}/>
+            {hasAccount && (
+              <button onClick={()=>setShowPw(s=>!s)}
+                style={{ position:"absolute",right:13,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:15,color:"#9ca3af",lineHeight:1 }}>
+                {showPw?"🙈":"👁"}
+              </button>
+            )}
           </div>
         </div>
-        {error && <div style={{ fontSize:11, color:"#dc2626", fontWeight:600, marginBottom:14, padding:"9px 13px",
-          background:"#fff1f0", borderRadius:9, border:"1px solid #fca5a5" }}>{error}</div>}
-        <button onClick={handleLogin} disabled={loading}
+
+        {error && (
+          <div style={{ fontSize:11, color:"#dc2626", fontWeight:600, marginBottom:16, padding:"10px 13px",
+            background:"#fff1f0", borderRadius:9, border:"1px solid #fca5a5", display:"flex", alignItems:"center", gap:7 }}>
+            <span>⚠️</span> {error}
+          </div>
+        )}
+
+        <button onClick={handleLogin} disabled={loading || !hasAccount}
           style={{ width:"100%", padding:"13px", borderRadius:12, border:"none",
-            background:loading?"#e5e7eb":"linear-gradient(135deg,#dc2626,#b91c1c)", color:loading?"#9ca3af":"white",
-            fontSize:13, fontWeight:700, cursor:loading?"not-allowed":"pointer", fontFamily:"'Sora',sans-serif",
-            marginBottom:12, boxShadow:loading?"none":"0 6px 20px rgba(220,38,38,0.3)" }}>
+            background: !hasAccount ? "#f3f4f6" : loading ? "#e5e7eb" : "linear-gradient(135deg,#dc2626,#b91c1c)",
+            color: (!hasAccount || loading) ? "#9ca3af" : "white",
+            fontSize:13, fontWeight:700, cursor: (!hasAccount || loading) ? "not-allowed" : "pointer",
+            fontFamily:"'Sora',sans-serif", boxShadow: (!hasAccount || loading) ? "none" : "0 6px 20px rgba(220,38,38,0.28)",
+            transition:"all 0.2s", letterSpacing:.3 }}>
           {loading ? "Signing in…" : "Sign In →"}
         </button>
-        <div style={{ textAlign:"center", fontSize:11, color:"#9ca3af", marginBottom:4 }}>Don't have an account?</div>
-        <button onClick={onCreateAccount}
-          style={{ width:"100%", padding:"13px", borderRadius:12,
-            border:"2px solid #dc2626", background:"transparent", color:"#dc2626",
-            fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"'Sora',sans-serif",
-            transition:"all 0.2s" }}
-          onMouseEnter={e=>{e.currentTarget.style.background="#fff5f5";}}
-          onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}>
-          Create New Account
-        </button>
+
+        {!hasAccount && (
+          <div style={{ marginTop:18, padding:"12px 14px", borderRadius:10, background:"#f0fdf4",
+            border:"1px solid #bbf7d0", display:"flex", gap:8, alignItems:"center" }}>
+            <span style={{fontSize:16}}>👋</span>
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, color:"#166534" }}>First time here?</div>
+              <div style={{ fontSize:10, color:"#4ade80" === "#4ade80" ? "#15803d" : "#15803d", marginTop:1 }}>
+                Use the <strong>"Create Account →"</strong> button at the top right to set up your profile.
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -848,7 +893,15 @@ function OnboardingWizard({ onComplete }) {
                 {row.enabled && (
                   <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                     <span style={{ fontSize:11, fontWeight:700, color:"#6b7280", flexShrink:0 }}>S$</span>
-                    <input type="number" value={row.value} onChange={e=>setAssetRows(rows=>rows.map((r,i)=>i===idx?{...r,value:e.target.value}:r))}
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={row.value}
+                      onChange={e=>{
+                        const v = e.target.value.replace(/[^0-9.]/g,"").replace(/^(\d*\.?\d*).*$/,"$1");
+                        setAssetRows(rows=>rows.map((r,i)=>i===idx?{...r,value:v}:r));
+                      }}
+                      onKeyDown={e=>{if(["-","e","E","+"].includes(e.key))e.preventDefault();}}
                       placeholder={row.placeholder}
                       style={{ width:110, padding:"6px 10px", borderRadius:8, border:"1px solid #fecaca",
                         background:"white", fontSize:12, fontFamily:"'Sora',sans-serif", outline:"none",
@@ -880,7 +933,9 @@ function OnboardingWizard({ onComplete }) {
                   style={{padding:"8px 10px",borderRadius:8,border:"1px solid #fecaca",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none",background:"white"}}>
                   {ASSET_CATS.map(c=><option key={c}>{c}</option>)}
                 </select>
-                <input type="number" placeholder="Value (SGD)" value={newCustA.value} onChange={e=>setNewCustA(a=>({...a,value:e.target.value}))}
+                <input type="text" inputMode="decimal" placeholder="Value (SGD)" value={newCustA.value}
+                  onChange={e=>{const v=e.target.value.replace(/[^0-9.]/g,"").replace(/^(\d*\.?\d*).*$/,"$1");setNewCustA(a=>({...a,value:v}));}}
+                  onKeyDown={e=>{if(["-","e","E","+"].includes(e.key))e.preventDefault();}}
                   style={{padding:"8px 10px",borderRadius:8,border:"1px solid #fecaca",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none"}}/>
               </div>
               <div style={{ display:"flex", gap:8 }}>
@@ -929,13 +984,29 @@ function OnboardingWizard({ onComplete }) {
                   <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                     <div>
                       <div style={{ fontSize:9, color:"#9ca3af", marginBottom:2 }}>Total (S$)</div>
-                      <input type="number" value={row.value} onChange={e=>setLiabRows(rows=>rows.map((r,i)=>i===idx?{...r,value:e.target.value}:r))}
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={row.value}
+                        onChange={e=>{
+                          const v=e.target.value.replace(/[^0-9.]/g,"").replace(/^(\d*\.?\d*).*$/,"$1");
+                          setLiabRows(rows=>rows.map((r,i)=>i===idx?{...r,value:v}:r));
+                        }}
+                        onKeyDown={e=>{if(["-","e","E","+"].includes(e.key))e.preventDefault();}}
                         placeholder={row.placeholder}
                         style={{ width:95, padding:"6px 8px", borderRadius:8, border:"1px solid #fecaca", background:"white", fontSize:11, fontFamily:"'Sora',sans-serif", outline:"none" }}/>
                     </div>
                     <div>
                       <div style={{ fontSize:9, color:"#9ca3af", marginBottom:2 }}>Monthly (S$)</div>
-                      <input type="number" value={row.monthly} onChange={e=>setLiabRows(rows=>rows.map((r,i)=>i===idx?{...r,monthly:e.target.value}:r))}
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={row.monthly}
+                        onChange={e=>{
+                          const v=e.target.value.replace(/[^0-9.]/g,"").replace(/^(\d*\.?\d*).*$/,"$1");
+                          setLiabRows(rows=>rows.map((r,i)=>i===idx?{...r,monthly:v}:r));
+                        }}
+                        onKeyDown={e=>{if(["-","e","E","+"].includes(e.key))e.preventDefault();}}
                         placeholder={row.mpHolder}
                         style={{ width:85, padding:"6px 8px", borderRadius:8, border:"1px solid #fecaca", background:"white", fontSize:11, fontFamily:"'Sora',sans-serif", outline:"none" }}/>
                     </div>
@@ -966,9 +1037,13 @@ function OnboardingWizard({ onComplete }) {
                   style={{padding:"8px 10px",borderRadius:8,border:"1px solid #fecaca",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none",background:"white"}}>
                   {LIAB_CATS.map(c=><option key={c}>{c}</option>)}
                 </select>
-                <input type="number" placeholder="Total (S$)" value={newCustL.value} onChange={e=>setNewCustL(l=>({...l,value:e.target.value}))}
+                <input type="text" inputMode="decimal" placeholder="Total (S$)" value={newCustL.value}
+                  onChange={e=>{const v=e.target.value.replace(/[^0-9.]/g,"").replace(/^(\d*\.?\d*).*$/,"$1");setNewCustL(l=>({...l,value:v}));}}
+                  onKeyDown={e=>{if(["-","e","E","+"].includes(e.key))e.preventDefault();}}
                   style={{padding:"8px 10px",borderRadius:8,border:"1px solid #fecaca",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none"}}/>
-                <input type="number" placeholder="Monthly (S$)" value={newCustL.monthly} onChange={e=>setNewCustL(l=>({...l,monthly:e.target.value}))}
+                <input type="text" inputMode="decimal" placeholder="Monthly (S$)" value={newCustL.monthly}
+                  onChange={e=>{const v=e.target.value.replace(/[^0-9.]/g,"").replace(/^(\d*\.?\d*).*$/,"$1");setNewCustL(l=>({...l,monthly:v}));}}
+                  onKeyDown={e=>{if(["-","e","E","+"].includes(e.key))e.preventDefault();}}
                   style={{padding:"8px 10px",borderRadius:8,border:"1px solid #fecaca",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none"}}/>
               </div>
               <div style={{ display:"flex", gap:8 }}>
@@ -1363,7 +1438,7 @@ export default function App() {
   // ── Onboarding gate ──
   const [onboarded, setOnboarded] = useState(false);
   const [loggedIn,  setLoggedIn]  = useState(false);
-  const [showLogin, setShowLogin] = useState(true); // true=login, false=create account
+  const [showLogin, setShowLogin] = useState(true); // true=show login screen, false=show onboarding wizard
   const [loading,   setLoading]   = useState(true);
 
   // ── Core state ──
@@ -1570,15 +1645,16 @@ export default function App() {
       <div style={{fontSize:32,animation:"pulse 1.2s infinite"}}>⬡</div>
     </div>
   );
-  // If account exists but not logged in → show login
-  if (onboarded && !loggedIn) return (
+  // New user clicked "Create Account" — show questionnaire
+  if (!loggedIn && !showLogin) return <OnboardingWizard onComplete={handleOnboardingComplete}/>;
+  // Always show login screen first for everyone (new and returning users)
+  if (!loggedIn) return (
     <LoginScreen
+      hasAccount={onboarded}
       onLogin={handleLogin}
-      onCreateAccount={() => { setOnboarded(false); setShowLogin(false); }}
+      onCreateAccount={()=>setShowLogin(false)}
     />
   );
-  // If no account yet → show onboarding wizard
-  if (!onboarded || !loggedIn) return <OnboardingWizard onComplete={handleOnboardingComplete}/>;
   if (!profile)   return <OnboardingWizard onComplete={handleOnboardingComplete}/>;
 
   const firstName = (profile.name||"").split(" ")[0] || "User";
@@ -1663,7 +1739,9 @@ export default function App() {
           {/* Logout button */}
           <button
             onClick={()=>{
+              // Only clear session — keep onboarded=true so login screen knows account exists
               setLoggedIn(false);
+              setShowLogin(true);
               setProfile(null);
               setAssets([]);
               setLiabs([]);
@@ -2269,11 +2347,17 @@ export default function App() {
                         onClick={()=>{
                           const stored = profile?.passwordHash;
                           const entered = btoa(unescape(encodeURIComponent(resetPwInput)));
-                          if(!stored){ localStorage.removeItem(STORAGE_KEY); setLoggedIn(false); setOnboarded(false); setProfile(null); setAssets([]); setLiabs([]); return; }
+                          if(!stored){
+                            localStorage.removeItem(STORAGE_KEY);
+                            setLoggedIn(false); setOnboarded(false); setShowLogin(true);
+                            setProfile(null); setAssets([]); setLiabs([]);
+                            return;
+                          }
                           if(entered===stored){
                             localStorage.removeItem(STORAGE_KEY);
-                            setLoggedIn(false); setOnboarded(false); setProfile(null);
-                            setAssets([]); setLiabs([]); setConnected({}); setExpenses(INIT_EXPENSES); setDone([]);
+                            setLoggedIn(false); setOnboarded(false); setShowLogin(true);
+                            setProfile(null); setAssets([]); setLiabs([]);
+                            setConnected({}); setExpenses(INIT_EXPENSES); setDone([]);
                             setShowResetConfirm(false); setResetPwInput(""); setResetPwError("");
                             setScreen("home");
                           } else { setResetPwError("Incorrect password. Try again."); }
