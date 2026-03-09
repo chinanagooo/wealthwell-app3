@@ -53,11 +53,14 @@ const CONNECTED_PLATFORMS = [
 ];
 
 const SCENARIOS_DEF = [
-  { id:"crash",      label:"Market Crash",  icon:"📉", color:"#ef4444", bg:"#fff1f0", desc:"Equity & crypto downturn"    },
-  { id:"jobloss",    label:"Job Loss",      icon:"💼", color:"#f97316", bg:"#fff7ed", desc:"Months without income"       },
-  { id:"rates",      label:"Rate Hike",     icon:"📊", color:"#8b5cf6", bg:"#f5f3ff", desc:"Central bank rate rise"      },
-  { id:"retirement", label:"Retirement",    icon:"🌅", color:"#10b981", bg:"#f0fdf4", desc:"Long-term wealth projection"  },
-  { id:"property",   label:"2nd Property",  icon:"🏠", color:"#06b6d4", bg:"#ecfeff", desc:"Additional property purchase" },
+  // Scenario Engine (shocks)
+  { id:"crash",    label:"Market Crash",         icon:"📉", color:"#ef4444", bg:"#fff1f0", desc:"Stocks×0.8 · Crypto×0.7 · Gold×1.05",  type:"shock"    },
+  { id:"jobloss",  label:"Job Loss",             icon:"💼", color:"#f97316", bg:"#fff7ed", desc:"Income→0 · Cash−(3×expenses)",           type:"shock"    },
+  { id:"property", label:"Property Purchase",    icon:"🏠", color:"#06b6d4", bg:"#ecfeff", desc:"Cash−15K · Mortgage+50K · Property+50K", type:"shock"    },
+  // Decision Simulator (positive actions)
+  { id:"fund",     label:"Boost Emergency Fund", icon:"🏦", color:"#10b981", bg:"#f0fdf4", desc:"Cash+8000 — improves liquidity",          type:"decision" },
+  { id:"diversify",label:"Diversify Portfolio",  icon:"📊", color:"#6366f1", bg:"#f5f3ff", desc:"Stocks×0.9 · Gold×1.2 · Cash×1.1",       type:"decision" },
+  { id:"debtpay",  label:"Reduce Debt",          icon:"💳", color:"#8b5cf6", bg:"#faf5ff", desc:"Loan−10K · Credit−5K",                   type:"decision" },
 ];
 
 const PRO_METRICS = [
@@ -110,112 +113,217 @@ const fc = (v, cur, short=false) => {
 const sc = s => s>=75?"#10b981":s>=55?"#f59e0b":"#ef4444";
 const sl = s => s>=75?"Excellent":s>=60?"Good":s>=45?"Fair":"Needs Work";
 
-// ─── DYNAMIC WELLNESS COMPUTATION ─────────────────────────────────────────────
+// ─── METRICS ENGINE — aligned to Logic.docx ───────────────────────────────────
+// Asset category mappings to doc buckets:
+//   Cash    → "Cash & Deposits"
+//   Stocks  → "Stocks & ETFs"
+//   Property→ "Real Estate"
+//   Crypto  → "Cryptocurrency"
+//   Gold    → "Commodities" | "Private Equity" | "Retirement (CPF)" | "Art & Collectibles" | "Other"
+
 const computeWellness = (assets, liabs, profile) => {
-  const totalA  = assets.reduce((s, a) => s + a.value, 0);
-  const totalL  = liabs.reduce((s,  l) => s + l.value, 0);
-  const cashA   = assets.filter(a => a.category === "Cash & Deposits").reduce((s, a) => s + a.value, 0);
-  const retireA = assets.filter(a => a.category === "Retirement (CPF)").reduce((s, a) => s + a.value, 0);
-  const salary  = parseFloat(profile.salary) || 6000;
-  const expenses= parseFloat(profile.monthlyExpenses) || salary * 0.5;
-  const cats    = new Set(assets.map(a => a.category));
+  const totalA   = assets.reduce((s,a)=>s+a.value,0);
+  const totalL   = liabs.reduce((s,l)=>s+l.value,0);
+  const salary   = parseFloat(profile.salary)         || 6000;
+  const expenses = parseFloat(profile.monthlyExpenses)|| salary * 0.5;
+  const insurance= parseFloat(profile.insuranceCoverage) || 0;
+  const risk     = profile.riskTolerance || "Moderate";
 
-  // Liquidity: months covered vs 6-month target
-  const liqMonths = expenses > 0 ? (cashA / expenses) : 0;
-  const liquidity  = Math.min(100, Math.round((liqMonths / 6) * 100));
+  // Asset buckets
+  const cashA   = assets.filter(a=>a.category==="Cash & Deposits").reduce((s,a)=>s+a.value,0);
+  const stocksA = assets.filter(a=>a.category==="Stocks & ETFs").reduce((s,a)=>s+a.value,0);
+  const propA   = assets.filter(a=>a.category==="Real Estate").reduce((s,a)=>s+a.value,0);
+  const cryptoA = assets.filter(a=>a.category==="Cryptocurrency").reduce((s,a)=>s+a.value,0);
+  // Gold bucket = everything else (Commodities, CPF, PE, Art, Other)
+  const goldA   = assets.filter(a=>!["Cash & Deposits","Stocks & ETFs","Real Estate","Cryptocurrency"].includes(a.category)).reduce((s,a)=>s+a.value,0);
 
-  // Diversification: unique asset categories out of 7
-  const diversification = Math.min(100, Math.round((cats.size / 7) * 100));
+  // ── 1. Liquidity Score: ((Cash / Expenses) / 6) × 100, clamped 0–100
+  const liqMonths = expenses > 0 ? cashA / expenses : 0;
+  const liquidity = Math.min(100, Math.max(0, Math.round((liqMonths / 6) * 100)));
 
-  // Debt-to-asset: 0% = 100, 40%+ = 0
-  const debtRatio = totalA > 0 ? totalL / totalA : 1;
-  const debt = Math.max(0, Math.round(100 - debtRatio * 250));
+  // ── 2. Diversification Score: start 100, apply penalties, clamp 0–100
+  let diversification = 100;
+  if (totalA > 0) {
+    const shares = [cashA, stocksA, propA, cryptoA, goldA].map(v=>v/totalA);
+    const largest    = Math.max(...shares);
+    const cryptoShr  = cryptoA / totalA;
+    const propShr    = propA   / totalA;
+    if (largest   > 0.50) diversification -= 20;
+    if (cryptoShr > 0.30) diversification -= 15;
+    if (propShr   > 0.60) diversification -= 10;
+  }
+  diversification = Math.min(100, Math.max(0, diversification));
 
-  // Resilience: weighted combo
-  const resilience = Math.round(liquidity * 0.45 + diversification * 0.3 + debt * 0.25);
+  // ── 3. Volatility Score: 100 − (RiskExposure × 100), clamped 0–100
+  //    Weights: Cash 0.1 | Gold 0.3 | Property 0.4 | Stocks 0.6 | Crypto 0.9
+  let volatility = 50;
+  if (totalA > 0) {
+    const riskExp =
+      (cashA/totalA)  * 0.1 +
+      (goldA/totalA)  * 0.3 +
+      (propA/totalA)  * 0.4 +
+      (stocksA/totalA)* 0.6 +
+      (cryptoA/totalA)* 0.9;
+    volatility = Math.min(100, Math.max(0, Math.round(100 - riskExp * 100)));
+  }
 
-  // Protection: static baseline, reduced if no assets
-  const protection = assets.length === 0 ? 30 : 63;
+  // ── 4. Debt Load Score: 100 − (TotalDebt / TotalAssets × 100), clamped 0–100
+  const debtRatio = totalA > 0 ? totalL / totalA : (totalL > 0 ? 1 : 0);
+  const debtLoad  = Math.min(100, Math.max(0, Math.round(100 - debtRatio * 100)));
 
-  // Behaviour: static
-  const behaviour = 72;
+  // ── 5. Protection Score: CoverageRatio = Insurance / AnnualIncome
+  //    <3 → 40 | 3–6 → 70 | ≥6 → 90
+  const annualIncome  = salary * 12;
+  const coverageRatio = annualIncome > 0 ? insurance / annualIncome : 0;
+  const protection    = coverageRatio >= 6 ? 90 : coverageRatio >= 3 ? 70 : 40;
 
-  const overall = Math.round((liquidity + diversification + debt + resilience + protection + behaviour) / 6);
+  // ── 6. Behaviour Score: base 80, penalties: crypto>30% −10, Aggressive −10; clamp 30–100
+  let behaviour = 80;
+  if (totalA > 0 && cryptoA / totalA > 0.30) behaviour -= 10;
+  if (risk === "Aggressive") behaviour -= 10;
+  behaviour = Math.min(100, Math.max(30, behaviour));
+
+  // ── 7. Income Stability Score: Conservative 85 | Balanced/Moderate 80 | Aggressive 60
+  const incomeStability = risk === "Conservative" ? 85 : risk === "Aggressive" ? 60 : 80;
+
+  // ── 8. Wealth Wellness Score (overall)
+  //    0.25×Liq + 0.20×Div + 0.15×Vol + 0.15×Debt + 0.10×Prot + 0.10×Beh + 0.05×Inc
+  const overall = Math.round(
+    0.25 * liquidity +
+    0.20 * diversification +
+    0.15 * volatility +
+    0.15 * debtLoad +
+    0.10 * protection +
+    0.10 * behaviour +
+    0.05 * incomeStability
+  );
+
+  // ── 9. Financial Resilience Score
+  //    0.30×Liq + 0.20×Debt + 0.20×Div + 0.15×Inc + 0.10×Prot + 0.05×Beh
+  const resilience = Math.round(
+    0.30 * liquidity +
+    0.20 * debtLoad +
+    0.20 * diversification +
+    0.15 * incomeStability +
+    0.10 * protection +
+    0.05 * behaviour
+  );
+
+  // ── 10. Fragility Classification: ≥75 Low | 50–74 Moderate | <50 High
+  const fragility = resilience >= 75 ? "Low" : resilience >= 50 ? "Moderate" : "High";
+
+  // ── 11. Confidence Score: start 100, deduct for missing data
+  let confidence = 100;
+  if (!expenses || expenses <= 0)                                          confidence -= 20;
+  if (assets.length === 0)                                                 confidence -= 20;
+  if (liabs.length === 0)                                                  confidence -= 15;
+  if (!insurance || insurance <= 0)                                        confidence -= 15;
+  if (!profile.goals || (Array.isArray(profile.goals) && profile.goals.length === 0)) confidence -= 10;
+  if (!profile.riskTolerance)                                              confidence -= 10;
+  confidence = Math.max(0, confidence);
+  const confidenceLabel = confidence >= 80 ? "High" : confidence >= 50 ? "Medium" : "Low";
+
+  // ── 12. Survival Runway: Cash / Monthly Expenses
+  const survivalMonths = expenses > 0 ? cashA / expenses : 0;
+  const survivalLabel  = survivalMonths >= 6 ? "Strong runway" : survivalMonths >= 3 ? "Moderate runway" : "Fragile runway";
 
   return {
-    liquidity, diversification, debt, resilience, protection, behaviour,
-    overall: Math.max(1, Math.min(99, overall)),
-    liqMonths: liqMonths.toFixed(1),
-    debtRatioPct: (debtRatio * 100).toFixed(1),
+    liquidity, diversification, volatility, debtLoad, protection, behaviour, incomeStability,
+    overall:      Math.max(1, Math.min(99, overall)),
+    resilience:   Math.max(1, Math.min(99, resilience)),
+    fragility,
+    confidence,   confidenceLabel,
+    survivalMonths: parseFloat(survivalMonths.toFixed(1)),
+    survivalLabel,
+    // convenience aliases
+    liqMonths:     liqMonths.toFixed(1),
+    debtRatioPct:  (debtRatio * 100).toFixed(1),
+    coverageRatio: coverageRatio.toFixed(1),
+    debt: debtLoad,   // backward-compat alias
   };
 };
 
 const buildMetrics = (scores, profile) => {
-  const salary  = parseFloat(profile.salary) || 6000;
-  const expenses= parseFloat(profile.monthlyExpenses) || salary * 0.5;
+  const salary   = parseFloat(profile.salary)          || 6000;
+  const expenses = parseFloat(profile.monthlyExpenses) || salary * 0.5;
+  const SGD = {symbol:"S$",rate:1};
   return [
-    { key:"liquidity",       label:"Liquidity Buffer",          score:scores.liquidity,       color:"#f59e0b",
-      desc:`${scores.liqMonths} months covered`,
-      tip:`Target: 6 months (${fc(expenses*6, {symbol:"S$",rate:1})}).${scores.liquidity<60?" Build emergency fund urgently.":" Great coverage!"}` },
-    { key:"diversification", label:"Sector Diversification",    score:scores.diversification, color:"#6366f1",
-      desc:"Asset class spread",
-      tip: scores.diversification < 60 ? "Add more asset types to improve this score." : "Good spread. Watch for sector overweight." },
-    { key:"debt",            label:"Debt-to-Asset Ratio",       score:scores.debt,            color:"#06b6d4",
-      desc:`Ratio: ${scores.debtRatioPct}%`,
-      tip:`Target below 15%. ${parseFloat(scores.debtRatioPct) > 15 ? "Pay off high-interest debt first." : "Debt level is healthy."}` },
-    { key:"resilience",      label:"Drawdown Resilience",       score:scores.resilience,      color:"#ec4899",
-      desc:"Shock absorption capacity",
-      tip:"Improving liquidity buffer and diversification helps resilience most." },
-    { key:"behaviour",       label:"Emotional Trading Control", score:scores.behaviour,       color:"#10b981",
-      desc:"No panic patterns detected",
-      tip:"Concentration bias noted. Rebalancing is overdue." },
-    { key:"protection",      label:"Insurance Coverage Gap",    score:scores.protection,      color:"#8b5cf6",
-      desc:"~S$200K coverage gap",
-      tip:"Review term life insurance coverage urgently." },
+    { key:"liquidity",       label:"Liquidity Score",       score:scores.liquidity,       color:"#f59e0b",
+      desc:`${scores.liqMonths} months of expenses covered`,
+      tip:`Target: 6 months (${fc(expenses*6,SGD)}). ${scores.liquidity<60?"Build emergency fund urgently.":"Great coverage!"}` },
+    { key:"diversification", label:"Diversification Score", score:scores.diversification, color:"#6366f1",
+      desc:"Portfolio concentration check",
+      tip:scores.diversification<70?"Concentration penalty detected. Spread assets across more classes.":"Good spread across asset classes." },
+    { key:"volatility",      label:"Volatility Score",      score:scores.volatility,      color:"#06b6d4",
+      desc:"Higher = safer portfolio",
+      tip:scores.volatility<50?"High-risk assets dominate. Consider shifting toward cash or gold.":"Portfolio risk exposure is within a healthy range." },
+    { key:"debtLoad",        label:"Debt Load Score",       score:scores.debtLoad,        color:"#ec4899",
+      desc:`Debt ratio: ${scores.debtRatioPct}%`,
+      tip:parseFloat(scores.debtRatioPct)>40?"Debt is high relative to assets. Prioritise repayment.":"Debt level is manageable." },
+    { key:"protection",      label:"Protection Score",      score:scores.protection,      color:"#8b5cf6",
+      desc:`Coverage: ${scores.coverageRatio}× annual income`,
+      tip:scores.protection<60?"Review or increase insurance coverage urgently.":"Insurance coverage level is adequate." },
+    { key:"behaviour",       label:"Behaviour Score",       score:scores.behaviour,       color:"#10b981",
+      desc:"Crypto concentration & risk profile",
+      tip:scores.behaviour<70?"Crypto >30% or Aggressive profile reduces this score.":"Behaviour profile looks disciplined." },
+    { key:"incomeStability", label:"Income Stability",      score:scores.incomeStability, color:"#f97316",
+      desc:`Based on ${profile.riskTolerance||"Moderate"} risk tolerance`,
+      tip:scores.incomeStability<70?"Aggressive profile signals higher income variability.":"Income stability proxy is solid." },
+    { key:"resilience",      label:"Resilience Score",      score:scores.resilience,      color:"#14b8a6",
+      desc:`Fragility: ${scores.fragility}`,
+      tip:`Fragility is ${scores.fragility}. Improve liquidity and reduce debt to strengthen resilience.` },
   ];
 };
 
 const buildActions = (scores, assets, liabs, profile) => {
-  const salary  = parseFloat(profile.salary) || 6000;
-  const expenses= parseFloat(profile.monthlyExpenses) || salary * 0.5;
-  const actions = [];
-  if (scores.liquidity < 70)
-    actions.push({ id:1, priority:1, icon:"🏦", title:"Build Emergency Fund",       category:"Liquidity Buffer",       color:"#f59e0b", scenarioTag:"Job Loss",
-      problem:`Only ${scores.liqMonths} months of expenses are liquid`,
-      reason:"Financial advisors recommend 6 months of expenses as a safety net against job loss or emergencies",
-      action:`Transfer ${fc(expenses*6 - assets.filter(a=>a.category==="Cash & Deposits").reduce((s,a)=>s+a.value,0), {symbol:"S$",rate:1})} to a high-yield savings account such as DBS Multiplier`,
-      outcome:`Liquidity Buffer score rises from ${scores.liquidity} → 80`, impact:"+28 pts" });
-  const eqPct = assets.length ? Math.round(assets.filter(a=>a.category==="Stocks & ETFs").reduce((s,a)=>s+a.value,0) / assets.reduce((s,a)=>s+a.value,0) * 100) : 0;
-  if (eqPct > 35)
-    actions.push({ id:2, priority:2, icon:"📊", title:"Reduce Equity Concentration", category:"Sector Diversification", color:"#6366f1", scenarioTag:"Market Crash",
-      problem:`${eqPct}% of your portfolio is in stocks/ETFs`,
-      reason:"High single-asset concentration amplifies losses during corrections",
-      action:"Diversify 20% into global ETFs (VT or VXUS) and bonds for balance",
-      outcome:"Portfolio volatility reduced by ~18%", impact:"-18% vol" });
-  const ccDebt = liabs.filter(l=>l.category==="Credit Card").reduce((s,l)=>s+l.value,0);
-  if (ccDebt > 0)
-    actions.push({ id:3, priority:3, icon:"💳", title:"Clear Credit Card Debt",      category:"Debt-to-Asset Ratio",    color:"#ef4444", scenarioTag:"Rate Hike",
-      problem:`${fc(ccDebt, {symbol:"S$",rate:1})} credit card balance accruing ~26% annual interest`,
-      reason:"High-interest debt erodes wealth faster than most investment assets can grow",
-      action:"Pay off the balance in full using your existing cash buffer",
-      outcome:`Save ~${fc(ccDebt*0.26, {symbol:"S$",rate:1})} per year in interest charges`, impact:`+${fc(ccDebt*0.26,{symbol:"S$",rate:1})}/yr` });
-  if (scores.protection < 70)
-    actions.push({ id:4, priority:4, icon:"🛡️", title:"Close Insurance Coverage Gap", category:"Insurance Coverage Gap",  color:"#8b5cf6", scenarioTag:"Protection",
-      problem:"~S$200K coverage gap vs total financial obligations",
+  const salary   = parseFloat(profile.salary)          || 6000;
+  const expenses = parseFloat(profile.monthlyExpenses) || salary * 0.5;
+  const SGD      = {symbol:"S$",rate:1};
+  const cash     = assets.filter(a=>a.category==="Cash & Deposits").reduce((s,a)=>s+a.value,0);
+  const actions  = [];
+
+  // Rec 1: Liquidity < 60 → increase emergency fund
+  if (scores.liquidity < 60)
+    actions.push({ id:1, priority:1, icon:"🏦", title:"Increase Emergency Fund",
+      category:"Liquidity", color:"#f59e0b", scenarioTag:"Job Loss",
+      problem:`Only ${scores.liqMonths} months of expenses in liquid cash (target: 6)`,
+      reason:"6 months of expenses in cash is the standard safety net for job loss or emergencies",
+      action:`Add ${fc(Math.max(0,expenses*6-cash),SGD)} to a high-yield savings account like DBS Multiplier`,
+      outcome:`Liquidity Score: ${scores.liquidity} → ~100`, impact:"+pts" });
+
+  // Rec 2: Diversification < 70 → diversify
+  if (scores.diversification < 70)
+    actions.push({ id:2, priority:2, icon:"📊", title:"Diversify Holdings",
+      category:"Diversification", color:"#6366f1", scenarioTag:"Market Crash",
+      problem:"Portfolio is too concentrated — concentration penalty applied",
+      reason:"Spreading across asset classes reduces single-asset risk and improves resilience",
+      action:"Rebalance so no single asset exceeds 50% of portfolio; keep crypto under 30%",
+      outcome:`Diversification Score: ${scores.diversification} → 100`, impact:"+pts" });
+
+  // Rec 3: Debt Load < 70 → reduce debt
+  if (scores.debtLoad < 70)
+    actions.push({ id:3, priority:3, icon:"💳", title:"Reduce Debt",
+      category:"Debt Load", color:"#ef4444", scenarioTag:"Rate Hike",
+      problem:`Debt ratio is ${scores.debtRatioPct}% of total assets`,
+      reason:"High debt erodes net worth and reduces resilience to income shocks",
+      action:"Prioritise paying down high-interest loans and credit card balances first",
+      outcome:`Debt Load Score: ${scores.debtLoad} → improves with each payment`, impact:"+pts" });
+
+  // Rec 4: Protection < 60 → review insurance
+  if (scores.protection < 60)
+    actions.push({ id:4, priority:4, icon:"🛡️", title:"Review Insurance Coverage",
+      category:"Protection", color:"#8b5cf6", scenarioTag:"Protection",
+      problem:`Coverage ratio is ${scores.coverageRatio}× annual income (target: ≥6×)`,
       reason:"Insufficient coverage leaves dependants exposed in the event of critical illness or death",
-      action:"Get a term life insurance quote for S$500K coverage (~S$80/month)",
-      outcome:`Insurance Coverage Gap score rises from ${scores.protection} → 85+`, impact:"+22 pts" });
-  if (scores.diversification < 60)
-    actions.push({ id:5, priority:5, icon:"🌏", title:"Add Geographic Diversification", category:"Sector Diversification", color:"#10b981", scenarioTag:"Market Crash",
-      problem:"Portfolio is concentrated in a single geography",
-      reason:"Geographic diversification reduces exposure to local economic downturns",
-      action:"Allocate 10–15% to international ETFs covering Asia Pacific and Europe",
-      outcome:"Diversification score rises significantly", impact:"+15 pts" });
+      action:"Obtain term life insurance worth at least 6× your annual income",
+      outcome:`Protection Score: ${scores.protection} → 90`, impact:"+pts" });
+
   return actions.length > 0 ? actions : [
-    { id:99, priority:1, icon:"🎉", title:"Portfolio Looking Healthy",    category:"General",                color:"#10b981", scenarioTag:"General",
-      problem:"No critical issues detected in your portfolio",
-      reason:"Your current setup is well-balanced. Keep monitoring regularly.",
-      action:"Review your portfolio quarterly and rebalance if any category drifts > 5%",
+    { id:99, priority:1, icon:"🎉", title:"Portfolio Looking Healthy",
+      category:"General", color:"#10b981", scenarioTag:"General",
+      problem:"No critical issues detected across all 7 metrics",
+      reason:"Your portfolio is well-balanced. Keep monitoring regularly.",
+      action:"Review quarterly and rebalance if any category drifts beyond thresholds",
       outcome:"Maintain current Wealth Wellness Score", impact:"Maintain" }
   ];
 };
@@ -608,6 +716,8 @@ function OnboardingWizard({ onComplete }) {
   const [pHousehold, setPHousehold] = useState("2");
   const [pRisk, setPRisk]           = useState("Moderate");
   const [pGoals, setPGoals]         = useState(["Retirement","Emergency Fund"]);
+  const [pInsurance, setPInsurance] = useState("");  // insurance coverage amount
+  const [pSector, setPSector]       = useState("Balanced"); // portfolio sector focus
 
   // Step 3 – Assets
   const [assetRows, setAssetRows]   = useState(ASSET_SUGGESTIONS.map(s=>({...s, enabled:false, value:""})));
@@ -669,7 +779,8 @@ function OnboardingWizard({ onComplete }) {
       phone:pPhone, email:pEmail, address:pAddress,
       salary:parseFloat(pSalary)||0, monthlyExpenses:parseFloat(pExpenses)||(parseFloat(pSalary)*0.5),
       employer:pEmployer, household:parseInt(pHousehold)||2, riskTolerance:pRisk,
-      goals:pGoals, joinDate: new Date().toISOString(),
+      goals:pGoals, insuranceCoverage:parseFloat(pInsurance)||0, sectorFocus:pSector,
+      joinDate: new Date().toISOString(),
       passwordHash: btoa(unescape(encodeURIComponent(pPassword))),
     };
     onComplete({ profile, assets, liabs, connected });
@@ -828,6 +939,7 @@ function OnboardingWizard({ onComplete }) {
             <div style={{ paddingRight:12 }}>
               <OB_Input label="Monthly Gross Salary (SGD)" value={pSalary} onChange={setPSalary} type="number" placeholder="8500" required hint="Before CPF deductions"/>
               <OB_Input label="Monthly Expenses (est. SGD)" value={pExpenses} onChange={setPExpenses} type="number" placeholder="4500" hint="Leave blank to auto-estimate"/>
+              <OB_Input label="Total Insurance Coverage (SGD)" value={pInsurance} onChange={setPInsurance} type="number" placeholder="500000" hint="Sum of all life/critical illness policies"/>
               <OB_Input label="Employer / Company" value={pEmployer} onChange={setPEmployer} placeholder="Temasek Holdings"/>
             </div>
             <div style={{ paddingLeft:12, borderLeft:"1px solid #f3f4f6" }}>
@@ -841,16 +953,44 @@ function OnboardingWizard({ onComplete }) {
                   <span>1</span><span>8</span>
                 </div>
               </div>
-              <OB_Select label="Risk Tolerance" value={pRisk} onChange={setPRisk} options={RISK_OPTS}/>
-              <div style={{ marginBottom:14 }}>
-                <label style={{ display:"block", fontSize:11, fontWeight:700, color:"#374151", marginBottom:6 }}>Financial Goals</label>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-                  {GOALS_OPTS.map(g=>(
-                    <button key={g} onClick={()=>setPGoals(gs=>gs.includes(g)?gs.filter(x=>x!==g):[...gs,g])}
-                      style={{ padding:"4px 10px", borderRadius:99, border:`1px solid ${pGoals.includes(g)?"#dc2626":"#e5e7eb"}`,
-                        background:pGoals.includes(g)?"#fef2f2":"white", color:pGoals.includes(g)?"#dc2626":"#6b7280",
-                        fontSize:10, fontWeight:600, cursor:"pointer", fontFamily:"'Sora',sans-serif" }}>
+              {/* Risk Tolerance — Conservative | Balanced | Aggressive */}
+              <div style={{marginBottom:14}}>
+                <label style={{display:"block",fontSize:11,fontWeight:700,color:"#374151",marginBottom:6}}>Risk Tolerance</label>
+                <div style={{display:"flex",gap:6}}>
+                  {["Conservative","Balanced","Aggressive"].map(r=>(
+                    <button key={r} onClick={()=>setPRisk(r)}
+                      style={{flex:1,padding:"7px 4px",borderRadius:9,border:`1.5px solid ${pRisk===r?"#dc2626":"#e5e7eb"}`,
+                        background:pRisk===r?"#fef2f2":"white",color:pRisk===r?"#dc2626":"#6b7280",
+                        fontSize:10,fontWeight:pRisk===r?800:500,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Primary Financial Goal */}
+              <div style={{marginBottom:14}}>
+                <label style={{display:"block",fontSize:11,fontWeight:700,color:"#374151",marginBottom:6}}>Primary Financial Goal</label>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                  {["Financial security","Wealth growth","Retirement","Home purchase"].map(g=>(
+                    <button key={g} onClick={()=>setPGoals([g])}
+                      style={{padding:"4px 10px",borderRadius:99,border:`1px solid ${pGoals.includes(g)?"#dc2626":"#e5e7eb"}`,
+                        background:pGoals.includes(g)?"#fef2f2":"white",color:pGoals.includes(g)?"#dc2626":"#6b7280",
+                        fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>
                       {g}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Portfolio Sector Focus */}
+              <div style={{marginBottom:14}}>
+                <label style={{display:"block",fontSize:11,fontWeight:700,color:"#374151",marginBottom:6}}>Portfolio Sector Focus</label>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                  {["Balanced","Technology","Finance","Healthcare"].map(s=>(
+                    <button key={s} onClick={()=>setPSector(s)}
+                      style={{padding:"4px 10px",borderRadius:99,border:`1px solid ${pSector===s?"#dc2626":"#e5e7eb"}`,
+                        background:pSector===s?"#fef2f2":"white",color:pSector===s?"#dc2626":"#6b7280",
+                        fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>
+                      {s}
                     </button>
                   ))}
                 </div>
@@ -1449,7 +1589,14 @@ export default function App() {
   const [expenses, setExpenses] = useState(INIT_EXPENSES);
   const [spendLimit,setSpendLimit] = useState(100);
   const [done,     setDone]     = useState([]);
-  const [params,   setParams]   = useState({crash:{equityDrop:20,cryptoDrop:40},jobloss:{months:12},rates:{hikePct:2},retirement:{years:26,monthly:500},property:{price:600000}});
+  const [params,   setParams]   = useState({
+    crash:    { equityDrop:20, cryptoDrop:30 },
+    jobloss:  { months:3 },
+    property: { cashOut:15000, mortgageAdd:50000, propAdd:50000 },
+    fund:     { cashAdd:8000 },
+    diversify:{ stocksCut:10, goldBoost:20, cashBoost:10 },
+    debtpay:  { loanCut:10000, creditCut:5000 },
+  });
 
   // ── UI state ──
   const [screen,   setScreen]   = useState("home");
@@ -1522,7 +1669,14 @@ export default function App() {
     setExpenses(data.expenses   || INIT_EXPENSES);
     setSpendLimit(data.spendLimit || 100);
     setDone(data.done           || []);
-    setParams(data.params       || {crash:{equityDrop:20,cryptoDrop:40},jobloss:{months:12},rates:{hikePct:2},retirement:{years:26,monthly:500},property:{price:600000}});
+    setParams(data.params || {
+      crash:    { equityDrop:20, cryptoDrop:30 },
+      jobloss:  { months:3 },
+      property: { cashOut:15000, mortgageAdd:50000, propAdd:50000 },
+      fund:     { cashAdd:8000 },
+      diversify:{ stocksCut:10, goldBoost:20, cashBoost:10 },
+      debtpay:  { loanCut:10000, creditCut:5000 },
+    });
     setLoggedIn(true);
     setEditP(data.profile);
   }, []);
@@ -1559,33 +1713,94 @@ export default function App() {
   const topBand      = "linear-gradient(135deg,#1d4ed8 0%,#3b82f6 60%,#60a5fa 100%)";
   const accentPrimary = "#1d4ed8";
 
-  // ── Scenario impact ──
+  // ── Scenario & Decision Simulator (Logic.docx §9, §10) ──
   const calcImpact = () => {
-    if (!scenario || !profile) return null;
-    const p  = params;
-    const eV = assets.filter(a=>a.category==="Stocks & ETFs").reduce((s,a)=>s+a.value,0);
-    const cV = assets.filter(a=>a.category==="Cryptocurrency").reduce((s,a)=>s+a.value,0);
-    const pV = assets.filter(a=>a.category==="Real Estate").reduce((s,a)=>s+a.value,0);
-    const gV = assets.filter(a=>a.category==="Commodities").reduce((s,a)=>s+a.value,0);
-    if (scenario==="crash") {
-      const ei=-eV*(p.crash.equityDrop/100), ci=-cV*(p.crash.cryptoDrop/100), gi=gV*0.06;
-      return{nw:Math.round(ei+ci+gi),sc:-Math.round(p.crash.equityDrop/20*8),details:[`Stocks/ETFs: ${fc(ei,cur)}`,`Crypto: ${fc(ci,cur)}`,`Gold hedge: +${fc(gi,cur,true)}`,`Property: minimal impact`]};
+    if (!scenario || !profile || !scores) return null;
+    const salary   = parseFloat(profile.salary)          || 6000;
+    const expenses = parseFloat(profile.monthlyExpenses) || salary * 0.5;
+    const p = params;
+
+    const rescore = (aFn, lFn) => {
+      const sA = aFn ? assets.map(aFn) : assets;
+      const sL = lFn ? liabs.map(lFn)  : liabs;
+      return computeWellness(sA, sL, profile);
+    };
+
+    const cashV   = assets.filter(a=>a.category==="Cash & Deposits").reduce((s,a)=>s+a.value,0);
+    const stocksV = assets.filter(a=>a.category==="Stocks & ETFs").reduce((s,a)=>s+a.value,0);
+    const cryptoV = assets.filter(a=>a.category==="Cryptocurrency").reduce((s,a)=>s+a.value,0);
+    const goldV   = assets.filter(a=>!["Cash & Deposits","Stocks & ETFs","Real Estate","Cryptocurrency"].includes(a.category)).reduce((s,a)=>s+a.value,0);
+    const loanV   = liabs.filter(l=>!["Mortgage","Credit Card"].includes(l.category)).reduce((s,l)=>s+l.value,0);
+    const creditV = liabs.filter(l=>l.category==="Credit Card").reduce((s,l)=>s+l.value,0);
+
+    if (scenario === "crash") {
+      const eD = p.crash.equityDrop / 100, cD = p.crash.cryptoDrop / 100;
+      const ns = rescore(a=>{
+        if (a.category==="Stocks & ETFs")  return {...a,value:a.value*(1-eD)};
+        if (a.category==="Cryptocurrency") return {...a,value:a.value*(1-cD)};
+        if (!["Cash & Deposits","Stocks & ETFs","Real Estate","Cryptocurrency"].includes(a.category)) return {...a,value:a.value*1.05};
+        return a;
+      });
+      const nwDelta = -(stocksV*eD)-(cryptoV*cD)+(goldV*0.05);
+      return { nw:Math.round(nwDelta), newScore:ns.overall, sc:ns.overall-scores.overall,
+        survivalAfter:ns.survivalMonths, resilienceAfter:ns.resilience,
+        details:[`Stocks/ETFs: −${fc(stocksV*eD,cur,true)}`,`Crypto: −${fc(cryptoV*cD,cur,true)}`,`Gold hedge: +${fc(goldV*0.05,cur,true)}`,`Resilience: ${scores.resilience} → ${ns.resilience}`],
+        message:"Market-linked assets amplify downside risk." };
     }
-    if (scenario==="jobloss") {
-      const salary = profile.salary || 6000;
-      const burn = salary * p.jobloss.months;
-      return{nw:-Math.round(burn),sc:-12,details:[`Monthly salary lost: ${fc(salary,cur)}`,`Total over ${p.jobloss.months} months: ${fc(burn,cur)}`,`Emergency fund depleted in ${scores?.liqMonths||2.4} months`,`Forced investment liquidation at month 3`]};
+    if (scenario === "jobloss") {
+      const cashDrop = p.jobloss.months * expenses;
+      const ns = rescore(a=>a.category==="Cash & Deposits"?{...a,value:Math.max(0,a.value-cashDrop)}:a);
+      return { nw:-Math.round(cashDrop), newScore:ns.overall, sc:ns.overall-scores.overall,
+        survivalAfter:ns.survivalMonths, resilienceAfter:ns.resilience,
+        details:[`Cash burned (${p.jobloss.months} mo.): −${fc(cashDrop,cur,true)}`,`Monthly income lost: ${fc(salary,cur,true)}`,`Survival: ${scores.survivalMonths} → ${ns.survivalMonths} mo.`,`Resilience: ${scores.resilience} → ${ns.resilience}`],
+        message:"Loss of income weakens liquidity and resilience." };
     }
-    if (scenario==="rates") {
-      const pi=-pV*0.02*p.rates.hikePct, li=-totalL*0.01*p.rates.hikePct;
-      return{nw:Math.round(pi+li),sc:-Math.round(p.rates.hikePct*2),details:[`Property value: ${fc(pi,cur)}`,`Mortgage cost: +${fc(totalL*0.01*p.rates.hikePct,cur,true)}/yr`,`Cash yield: +${fc(totalA*0.003*p.rates.hikePct,cur,true)}/yr`,`Bond prices: down moderately`]};
+    if (scenario === "property") {
+      const { cashOut, mortgageAdd, propAdd } = p.property;
+      const ns = rescore(
+        a=>a.category==="Cash & Deposits"?{...a,value:Math.max(0,a.value-cashOut)}:
+           a.category==="Real Estate"?{...a,value:a.value+propAdd}:a,
+        l=>l.category==="Mortgage"?{...l,value:l.value+mortgageAdd}:l
+      );
+      return { nw:propAdd-cashOut-mortgageAdd, newScore:ns.overall, sc:ns.overall-scores.overall,
+        survivalAfter:ns.survivalMonths, resilienceAfter:ns.resilience,
+        details:[`Cash outlay: −${fc(cashOut,cur,true)}`,`Mortgage: +${fc(mortgageAdd,cur,true)}`,`Equity: +${fc(propAdd,cur,true)}`,`Liquidity: ${scores.liquidity} → ${ns.liquidity}`],
+        message:"Large purchases reduce liquidity and increase debt pressure." };
     }
-    if (scenario==="retirement") {
-      const growth = netWorth*(Math.pow(1.065,p.retirement.years)-1)+p.retirement.monthly*12*p.retirement.years*1.5;
-      return{nw:Math.round(growth),sc:12,details:[`Portfolio growth (6.5% p.a.): ${fc(netWorth*(Math.pow(1.065,p.retirement.years)-1),cur,true)}`,`CPF payouts: +${fc(142000*1.4,cur,true)}`,`Savings boost: +${fc(p.retirement.monthly*12*p.retirement.years,cur,true)}`,`Retirement in ${p.retirement.years} years`]};
+    if (scenario === "fund") {
+      const { cashAdd } = p.fund;
+      const ns = rescore(a=>a.category==="Cash & Deposits"?{...a,value:a.value+cashAdd}:a);
+      return { nw:cashAdd, newScore:ns.overall, sc:ns.overall-scores.overall,
+        survivalAfter:ns.survivalMonths, resilienceAfter:ns.resilience,
+        details:[`Cash added: +${fc(cashAdd,cur,true)}`,`Liquidity: ${scores.liquidity} → ${ns.liquidity}`,`Survival: ${scores.survivalMonths} → ${ns.survivalMonths} mo.`,`Resilience: ${scores.resilience} → ${ns.resilience}`],
+        message:"Improves liquidity and resilience." };
     }
-    if (scenario==="property") {
-      return{nw:Math.round(p.property.price*0.15),sc:-6,details:[`New mortgage: −${fc(p.property.price*0.8,cur)}`,`Down payment: −${fc(p.property.price*0.2,cur)}`,`Equity gained: +${fc(p.property.price*0.2,cur,true)}`,`Liquidity score drops to ~28`]};
+    if (scenario === "diversify") {
+      const { stocksCut, goldBoost, cashBoost } = p.diversify;
+      const sF=1-stocksCut/100, gF=1+goldBoost/100, cF=1+cashBoost/100;
+      const ns = rescore(a=>{
+        if (a.category==="Stocks & ETFs")  return {...a,value:a.value*sF};
+        if (a.category==="Cash & Deposits") return {...a,value:a.value*cF};
+        if (!["Cash & Deposits","Stocks & ETFs","Real Estate","Cryptocurrency"].includes(a.category)) return {...a,value:a.value*gF};
+        return a;
+      });
+      const nwDelta = -(stocksV*(stocksCut/100))+(goldV*(goldBoost/100))+(cashV*(cashBoost/100));
+      return { nw:Math.round(nwDelta), newScore:ns.overall, sc:ns.overall-scores.overall,
+        survivalAfter:ns.survivalMonths, resilienceAfter:ns.resilience,
+        details:[`Stocks trimmed: −${fc(stocksV*(stocksCut/100),cur,true)}`,`Gold/alts: +${fc(goldV*(goldBoost/100),cur,true)}`,`Cash: +${fc(cashV*(cashBoost/100),cur,true)}`,`Diversification: ${scores.diversification} → ${ns.diversification}`],
+        message:"Reduces concentration risk and volatility." };
+    }
+    if (scenario === "debtpay") {
+      const { loanCut, creditCut } = p.debtpay;
+      const ns = rescore(null,
+        l=>l.category==="Credit Card"?{...l,value:Math.max(0,l.value-creditCut)}:
+           !["Mortgage","Credit Card"].includes(l.category)?{...l,value:Math.max(0,l.value-loanCut)}:l
+      );
+      const saved = Math.min(loanV,loanCut)+Math.min(creditV,creditCut);
+      return { nw:saved, newScore:ns.overall, sc:ns.overall-scores.overall,
+        survivalAfter:ns.survivalMonths, resilienceAfter:ns.resilience,
+        details:[`Loan reduced: −${fc(Math.min(loanV,loanCut),cur,true)}`,`Credit cleared: −${fc(Math.min(creditV,creditCut),cur,true)}`,`Debt Load: ${scores.debtLoad} → ${ns.debtLoad}`,`Resilience: ${scores.resilience} → ${ns.resilience}`],
+        message:"Improves debt load and resilience." };
     }
     return null;
   };
@@ -1609,7 +1824,7 @@ export default function App() {
   };
   const markDone = id => {
     const a = actions.find(x=>x.id===id);
-    if (a) { setDone(d=>[{...a,doneAt:new Date().toLocaleDateString("en-SG")},...d].slice(0,10)); setActions(ac=>ac.filter(x=>x.id!==id)); setCardIdx(0); }
+    if (a) { setDone(d=>[{...a,doneAt:new Date().toLocaleDateString("en-SG")},...d].slice(0,5)); setActions(ac=>ac.filter(x=>x.id!==id)); setCardIdx(0); }
   };
   const addExpense = () => {
     if (!newExpense.name || !newExpense.amount) return;
@@ -1772,9 +1987,9 @@ export default function App() {
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:11,marginBottom:13}}>
                 {[
-                  {l:"Net Worth",     v:fc(netWorth,cur),     c:"#0f172a", hi:netWorth>=0,  sp:INIT_WEALTH_HIST},
-                  {l:"Total Assets",  v:fc(totalA,cur),       c:"#10b981", hi:true,          sp:INIT_WEALTH_HIST},
-                  {l:"Total Liabilities",v:`-${fc(totalL,cur)}`,c:"#ef4444",hi:false,        sp:null},
+                  {l:"Net Worth",        v:fc(netWorth,cur),        c:"#0f172a", hi:netWorth>=0, sp:INIT_WEALTH_HIST},
+                  {l:"Total Assets",     v:fc(totalA,cur),          c:"#10b981", hi:true,         sp:INIT_WEALTH_HIST},
+                  {l:"Total Liabilities",v:`-${fc(totalL,cur)}`,    c:"#ef4444", hi:false,        sp:null},
                 ].map((x,i)=>(
                   <div key={i} className="hov" style={{background:card,borderRadius:15,padding:18,border:`1px solid ${bdr}`,transition:"all .3s"}}>
                     <Lbl>{x.l}</Lbl>
@@ -1787,8 +2002,8 @@ export default function App() {
                 <div className="hov" style={{background:card,borderRadius:15,padding:18,border:`1px solid ${bdr}`,display:"flex",gap:16,alignItems:"center",transition:"all .3s"}}>
                   <Ring score={wellness} size={115} dark={false}/>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:13,fontWeight:800,color:txt,marginBottom:3}}>Wealth Wellness Score</div>
-                    <div style={{fontSize:11,color:sub,marginBottom:9}}>Based on {METRICS.length} financial health metrics</div>
+                    <div style={{fontSize:13,fontWeight:800,color:txt,marginBottom:2}}>Wealth Wellness Score</div>
+                    <div style={{fontSize:10,color:sub,marginBottom:8}}>Based on 7 financial health metrics</div>
                     {METRICS.slice(0,3).map((m,i)=>(
                       <div key={i} style={{marginBottom:6}}>
                         <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
@@ -1805,6 +2020,38 @@ export default function App() {
                   <EDonut assets={assets} liabilities={liabs} cur={cur}/>
                 </div>
               </div>
+              {/* Resilience + Survival Runway + Confidence row */}
+              {scores&&(
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:11,marginBottom:11}}>
+                  <div className="hov" style={{background:card,borderRadius:13,padding:16,border:`1px solid ${bdr}`,borderLeft:`4px solid #14b8a6`,transition:"all .3s"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                      <div style={{fontSize:11,fontWeight:800,color:txt}}>Resilience Score</div>
+                      <strong style={{fontSize:17,color:"#14b8a6"}}>{scores.resilience}</strong>
+                    </div>
+                    <div style={{height:4,background:"#f1f5f9",borderRadius:99,marginBottom:5}}><div style={{height:"100%",width:`${scores.resilience}%`,background:"#14b8a6",borderRadius:99}}/></div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{fontSize:9,fontWeight:700,color:"#14b8a6",background:"#ccfbf1",padding:"3px 7px",borderRadius:5}}>Fragility: {scores.fragility}</div>
+                      <div style={{fontSize:9,color:sub}}>{scores.resilience>=75?"Low risk":scores.resilience>=50?"Moderate":"High risk"}</div>
+                    </div>
+                  </div>
+                  <div className="hov" style={{background:card,borderRadius:13,padding:16,border:`1px solid ${bdr}`,borderLeft:`4px solid ${scores.survivalMonths>=6?"#10b981":scores.survivalMonths>=3?"#f59e0b":"#ef4444"}`,transition:"all .3s"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                      <div style={{fontSize:11,fontWeight:800,color:txt}}>Survival Runway</div>
+                      <strong style={{fontSize:17,color:scores.survivalMonths>=6?"#10b981":scores.survivalMonths>=3?"#f59e0b":"#ef4444"}}>{scores.survivalMonths}mo</strong>
+                    </div>
+                    <div style={{height:4,background:"#f1f5f9",borderRadius:99,marginBottom:5}}><div style={{height:"100%",width:`${Math.min(100,(scores.survivalMonths/6)*100)}%`,background:scores.survivalMonths>=6?"#10b981":scores.survivalMonths>=3?"#f59e0b":"#ef4444",borderRadius:99}}/></div>
+                    <div style={{fontSize:9,fontWeight:700,color:scores.survivalMonths>=6?"#16a34a":scores.survivalMonths>=3?"#d97706":"#dc2626",background:scores.survivalMonths>=6?"#dcfce7":scores.survivalMonths>=3?"#fef3c7":"#fee2e2",padding:"3px 7px",borderRadius:5,display:"inline-block"}}>{scores.survivalLabel}</div>
+                  </div>
+                  <div className="hov" style={{background:card,borderRadius:13,padding:16,border:`1px solid ${bdr}`,borderLeft:`4px solid ${scores.confidence>=80?"#10b981":scores.confidence>=50?"#f59e0b":"#ef4444"}`,transition:"all .3s"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                      <div style={{fontSize:11,fontWeight:800,color:txt}}>Recommendation Confidence</div>
+                      <strong style={{fontSize:17,color:scores.confidence>=80?"#10b981":scores.confidence>=50?"#f59e0b":"#ef4444"}}>{scores.confidence}%</strong>
+                    </div>
+                    <div style={{height:4,background:"#f1f5f9",borderRadius:99,marginBottom:5}}><div style={{height:"100%",width:`${scores.confidence}%`,background:scores.confidence>=80?"#10b981":scores.confidence>=50?"#f59e0b":"#ef4444",borderRadius:99}}/></div>
+                    <div style={{fontSize:9,fontWeight:700,color:scores.confidence>=80?"#16a34a":scores.confidence>=50?"#d97706":"#dc2626",background:scores.confidence>=80?"#dcfce7":scores.confidence>=50?"#fef3c7":"#fee2e2",padding:"3px 7px",borderRadius:5,display:"inline-block"}}>{scores.confidenceLabel} Confidence</div>
+                  </div>
+                </div>
+              )}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:11}}>
                 {METRICS.slice(0,3).map((m,i)=>(
                   <div key={i} className="hov" style={{background:card,borderRadius:13,padding:14,border:`1px solid ${bdr}`,borderLeft:`4px solid ${m.color}`,transition:"all .3s"}}>
@@ -1942,6 +2189,78 @@ export default function App() {
               </div>
               {pro&&(
                 <>
+                  {/* Fragility + Confidence + Survival Runway diagnostic row */}
+                  {scores&&(
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:11,marginBottom:11}}>
+                      <div style={{background:card,borderRadius:14,padding:18,border:`2px solid #14b8a6`,borderLeft:`6px solid #14b8a6`}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                          <div style={{background:"linear-gradient(135deg,#dc2626,#9f1239)",borderRadius:5,padding:"2px 9px",fontSize:9,fontWeight:800,color:"white",letterSpacing:1}}>⬡ PRO</div>
+                          <div style={{fontSize:11,fontWeight:800,color:txt}}>Fragility Analysis</div>
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}>
+                          <div style={{textAlign:"center"}}>
+                            <div style={{fontSize:28,fontWeight:800,color:"#14b8a6"}}>{scores.resilience}</div>
+                            <div style={{fontSize:9,color:sub}}>Resilience</div>
+                          </div>
+                          <div style={{flex:1}}>
+                            <div style={{height:8,background:"#f1f5f9",borderRadius:99,marginBottom:4}}><div style={{height:"100%",width:`${scores.resilience}%`,background:"#14b8a6",borderRadius:99,transition:"width 0.8s ease"}}/></div>
+                            <div style={{fontSize:10,fontWeight:800,padding:"4px 10px",borderRadius:99,display:"inline-block",
+                              background:scores.fragility==="Low"?"#ccfbf1":scores.fragility==="Moderate"?"#fef3c7":"#fee2e2",
+                              color:scores.fragility==="Low"?"#0d9488":scores.fragility==="Moderate"?"#d97706":"#dc2626"}}>
+                              {scores.fragility} Fragility
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{fontSize:9,color:sub,lineHeight:1.6}}>
+                          {scores.fragility==="Low"?"Portfolio can absorb financial shocks well. Maintain current balance.":
+                           scores.fragility==="Moderate"?"Some vulnerability to income disruption or market events. Strengthen liquidity.":
+                           "High vulnerability detected. Prioritise emergency fund and debt reduction immediately."}
+                        </div>
+                      </div>
+                      <div style={{background:card,borderRadius:14,padding:18,border:`2px solid ${scores.confidence>=80?"#10b981":scores.confidence>=50?"#f59e0b":"#ef4444"}`,borderLeft:`6px solid ${scores.confidence>=80?"#10b981":scores.confidence>=50?"#f59e0b":"#ef4444"}`}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                          <div style={{background:"linear-gradient(135deg,#dc2626,#9f1239)",borderRadius:5,padding:"2px 9px",fontSize:9,fontWeight:800,color:"white",letterSpacing:1}}>⬡ PRO</div>
+                          <div style={{fontSize:11,fontWeight:800,color:txt}}>Recommendation Confidence</div>
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}>
+                          <div style={{textAlign:"center"}}>
+                            <div style={{fontSize:28,fontWeight:800,color:scores.confidence>=80?"#10b981":scores.confidence>=50?"#f59e0b":"#ef4444"}}>{scores.confidence}%</div>
+                            <div style={{fontSize:9,color:sub}}>Score</div>
+                          </div>
+                          <div style={{flex:1}}>
+                            <div style={{height:8,background:"#f1f5f9",borderRadius:99,marginBottom:4}}><div style={{height:"100%",width:`${scores.confidence}%`,background:scores.confidence>=80?"#10b981":scores.confidence>=50?"#f59e0b":"#ef4444",borderRadius:99,transition:"width 0.8s ease"}}/></div>
+                            <div style={{fontSize:10,fontWeight:800,padding:"4px 10px",borderRadius:99,display:"inline-block",
+                              background:scores.confidence>=80?"#dcfce7":scores.confidence>=50?"#fef3c7":"#fee2e2",
+                              color:scores.confidence>=80?"#16a34a":scores.confidence>=50?"#d97706":"#dc2626"}}>
+                              {scores.confidenceLabel} Confidence
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{fontSize:9,color:sub,lineHeight:1.6}}>Based on profile completeness. Add insurance coverage, debts and goals to improve accuracy.</div>
+                      </div>
+                      <div style={{background:card,borderRadius:14,padding:18,border:`2px solid ${scores.survivalMonths>=6?"#10b981":scores.survivalMonths>=3?"#f59e0b":"#ef4444"}`,borderLeft:`6px solid ${scores.survivalMonths>=6?"#10b981":scores.survivalMonths>=3?"#f59e0b":"#ef4444"}`}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                          <div style={{background:"linear-gradient(135deg,#dc2626,#9f1239)",borderRadius:5,padding:"2px 9px",fontSize:9,fontWeight:800,color:"white",letterSpacing:1}}>⬡ PRO</div>
+                          <div style={{fontSize:11,fontWeight:800,color:txt}}>Survival Runway</div>
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}>
+                          <div style={{textAlign:"center"}}>
+                            <div style={{fontSize:28,fontWeight:800,color:scores.survivalMonths>=6?"#10b981":scores.survivalMonths>=3?"#f59e0b":"#ef4444"}}>{scores.survivalMonths}</div>
+                            <div style={{fontSize:9,color:sub}}>months</div>
+                          </div>
+                          <div style={{flex:1}}>
+                            <div style={{height:8,background:"#f1f5f9",borderRadius:99,marginBottom:4}}><div style={{height:"100%",width:`${Math.min(100,(scores.survivalMonths/6)*100)}%`,background:scores.survivalMonths>=6?"#10b981":scores.survivalMonths>=3?"#f59e0b":"#ef4444",borderRadius:99,transition:"width 0.8s ease"}}/></div>
+                            <div style={{fontSize:10,fontWeight:800,padding:"4px 10px",borderRadius:99,display:"inline-block",
+                              background:scores.survivalMonths>=6?"#dcfce7":scores.survivalMonths>=3?"#fef3c7":"#fee2e2",
+                              color:scores.survivalMonths>=6?"#16a34a":scores.survivalMonths>=3?"#d97706":"#dc2626"}}>
+                              {scores.survivalLabel}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{fontSize:9,color:sub,lineHeight:1.6}}>Cash / Monthly Expenses = {scores.survivalMonths} months of income-free survival.</div>
+                      </div>
+                    </div>
+                  )}
                   {/* Bloomberg Pro analytics panel */}
                   <div style={{background:"linear-gradient(135deg,#1a0505,#2d0808)",borderRadius:15,padding:20,border:"1px solid #7f1d1d",marginBottom:11}}>
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
@@ -2115,122 +2434,256 @@ export default function App() {
           {/* ══ SCENARIOS ══ */}
           {screen==="scenarios"&&(
             <div className="sc">
-              <div style={{marginBottom:13}}><Lbl style={{color:"rgba(255,255,255,0.65)"}}>Test Your Resilience</Lbl><h1 style={{fontSize:23,fontWeight:800,color:"white"}}>Scenario Lab</h1></div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:9,marginBottom:14}}>
-                {SCENARIOS_DEF.map(s=>(
-                  <button key={s.id} onClick={()=>{
-                    const newId = s.id===scenario ? null : s.id;
-                    setScenario(newId);
-                    // Rebuild actions prioritised for this scenario, reset card index
-                    const base = buildActions(scores, assets, liabs, profile);
-                    setActions(buildActionsForScenario(newId, base));
-                    setCardIdx(0);
-                  }} style={{padding:"13px 8px",borderRadius:12,border:`2px solid ${scenario===s.id?s.color:bdr}`,background:scenario===s.id?s.bg:card,cursor:"pointer",transition:"all 0.22s",display:"flex",flexDirection:"column",alignItems:"center",gap:6,boxShadow:scenario===s.id?`0 0 16px ${s.color}33`:"none",fontFamily:"'Sora',sans-serif"}}>
-                    <span style={{fontSize:22}}>{s.icon}</span>
-                    <strong style={{fontSize:10,color:scenario===s.id?s.color:txt}}>{s.label}</strong>
-                    <div style={{fontSize:9,color:sub,textAlign:"center"}}>{s.desc}</div>
-                  </button>
-                ))}
-              </div>
-              {scenario&&sd&&impact&&(
-                <div style={{display:"grid",gridTemplateColumns:"270px 1fr",gap:11,animation:"fadeUp 0.3s ease"}}>
-                  <div style={{background:card,borderRadius:14,padding:18,border:`2px solid ${sd.color}44`}}>
-                    <div style={{fontSize:12,fontWeight:800,color:txt,marginBottom:12,display:"flex",gap:7,alignItems:"center"}}><span>{sd.icon}</span><strong>Adjust Parameters</strong></div>
-                    {scenario==="crash"&&[{l:"Equity drop",k:"equityDrop",min:5,max:60,step:5,u:"%"},{l:"Crypto drop",k:"cryptoDrop",min:10,max:90,step:10,u:"%"}].map(sl=>(
-                      <div key={sl.k} style={{marginBottom:12}}>
-                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:10,fontWeight:700,color:sub}}>{sl.l}</span><strong style={{fontSize:11,color:sd.color}}>{params.crash[sl.k]}{sl.u}</strong></div>
-                        <input type="range" min={sl.min} max={sl.max} step={sl.step} value={params.crash[sl.k]} onChange={e=>setParams(p=>({...p,crash:{...p.crash,[sl.k]:+e.target.value}}))} style={{width:"100%",accentColor:sd.color,color:sd.color,background:`linear-gradient(to right, ${sd.color} ${((params.crash[sl.k]-sl.min)/(sl.max-sl.min))*100}%, #e2e8f0 ${((params.crash[sl.k]-sl.min)/(sl.max-sl.min))*100}%)`}}/>
-                      </div>
-                    ))}
-                    {scenario==="jobloss"&&<div>
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:10,fontWeight:700,color:sub}}>Months without income</span><strong style={{fontSize:11,color:sd.color}}>{params.jobloss.months} mo.</strong></div>
-                      <input type="range" min={1} max={24} value={params.jobloss.months} onChange={e=>setParams(p=>({...p,jobloss:{months:+e.target.value}}))} style={{width:"100%",accentColor:sd.color,color:sd.color,background:`linear-gradient(to right, ${sd.color} ${((params.jobloss.months-1)/(24-1))*100}%, #e2e8f0 ${((params.jobloss.months-1)/(24-1))*100}%)`}}/>
-                      <div style={{marginTop:9,background:`${sd.color}12`,borderRadius:7,padding:"7px 9px",fontSize:10,fontWeight:700,color:sd.color}}>Monthly salary: <strong>{fc(profile.salary||0,cur)}</strong></div>
-                    </div>}
-                    {scenario==="rates"&&<div>
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:10,fontWeight:700,color:sub}}>Rate increase</span><strong style={{fontSize:11,color:sd.color}}>{params.rates.hikePct}%</strong></div>
-                      <input type="range" min={0.25} max={5} step={0.25} value={params.rates.hikePct} onChange={e=>setParams(p=>({...p,rates:{hikePct:+e.target.value}}))} style={{width:"100%",accentColor:sd.color,color:sd.color,background:`linear-gradient(to right, ${sd.color} ${((params.rates.hikePct-0.25)/(5-0.25))*100}%, #e2e8f0 ${((params.rates.hikePct-0.25)/(5-0.25))*100}%)`}}/>
-                    </div>}
-                    {scenario==="retirement"&&[{l:"Years to retirement",k:"years",min:5,max:40,fmt:v=>`${v} yrs`},{l:`Monthly savings (${cur.code})`,k:"monthly",min:100,max:5000,step:100,fmt:v=>fc(v,cur,true)}].map(sl=>(
-                      <div key={sl.k} style={{marginBottom:12}}>
-                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:10,fontWeight:700,color:sub}}>{sl.l}</span><strong style={{fontSize:11,color:sd.color}}>{sl.fmt(params.retirement[sl.k])}</strong></div>
-                        <input type="range" min={sl.min||5} max={sl.max} step={sl.step||1} value={params.retirement[sl.k]} onChange={e=>setParams(p=>({...p,retirement:{...p.retirement,[sl.k]:+e.target.value}}))} style={{width:"100%",accentColor:sd.color,color:sd.color,background:`linear-gradient(to right, ${sd.color} ${((params.retirement[sl.k]-(sl.min||5))/(sl.max-(sl.min||5)))*100}%, #e2e8f0 ${((params.retirement[sl.k]-(sl.min||5))/(sl.max-(sl.min||5)))*100}%)`}}/>
-                      </div>
-                    ))}
-                    {scenario==="property"&&<div>
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:10,fontWeight:700,color:sub}}>Property price</span><strong style={{fontSize:11,color:sd.color}}>{fc(params.property.price,cur,true)}</strong></div>
-                      <input type="range" min={300000} max={3000000} step={50000} value={params.property.price} onChange={e=>setParams(p=>({...p,property:{price:+e.target.value}}))} style={{width:"100%",accentColor:sd.color,color:sd.color,background:`linear-gradient(to right, ${sd.color} ${((params.property.price-300000)/(3000000-300000))*100}%, #e2e8f0 ${((params.property.price-300000)/(3000000-300000))*100}%)`}}/>
-                    </div>}
+              <div style={{marginBottom:13,display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
+                <div><Lbl style={{color:"rgba(255,255,255,0.65)"}}>Test Your Resilience</Lbl><h1 style={{fontSize:23,fontWeight:800,color:"white"}}>Scenario Lab</h1></div>
+                {scores&&(
+                  <div style={{background:"rgba(0,0,0,0.25)",borderRadius:12,padding:"8px 16px",textAlign:"center"}}>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.6)",fontWeight:700,marginBottom:2}}>SURVIVAL RUNWAY</div>
+                    <div style={{fontSize:20,fontWeight:800,color:scores.survivalMonths>=6?"#10b981":scores.survivalMonths>=3?"#f59e0b":"#ef4444"}}>{scores.survivalMonths} mo.</div>
+                    <div style={{fontSize:9,fontWeight:700,color:scores.survivalMonths>=6?"#10b981":scores.survivalMonths>=3?"#f59e0b":"#ef4444"}}>{scores.survivalLabel}</div>
                   </div>
-                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                )}
+              </div>
+
+              {/* ── Scenario selector grid ── */}
+              <div style={{marginBottom:8}}>
+                <div style={{fontSize:10,fontWeight:800,color:"rgba(255,255,255,0.55)",textTransform:"uppercase",letterSpacing:1,marginBottom:7}}>⚡ Scenario Engine — Financial Shocks</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:9,marginBottom:14}}>
+                  {SCENARIOS_DEF.filter(s=>s.type==="shock").map(s=>(
+                    <button key={s.id} onClick={()=>{
+                      const newId = s.id===scenario ? null : s.id;
+                      setScenario(newId);
+                      if (newId && scores) {
+                        const base = buildActions(scores, assets, liabs, profile);
+                        setActions(buildActionsForScenario(newId, base));
+                        setCardIdx(0);
+                      }
+                    }} style={{padding:"13px 8px",borderRadius:12,border:`2px solid ${scenario===s.id?s.color:bdr}`,background:scenario===s.id?s.bg:card,cursor:"pointer",transition:"all 0.22s",display:"flex",flexDirection:"column",alignItems:"center",gap:6,boxShadow:scenario===s.id?`0 0 16px ${s.color}33`:"none",fontFamily:"'Sora',sans-serif"}}>
+                      <span style={{fontSize:22}}>{s.icon}</span>
+                      <strong style={{fontSize:10,color:scenario===s.id?s.color:txt}}>{s.label}</strong>
+                      <div style={{fontSize:9,color:sub,textAlign:"center"}}>{s.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{marginBottom:14}}>
+                <div style={{fontSize:10,fontWeight:800,color:"rgba(255,255,255,0.55)",textTransform:"uppercase",letterSpacing:1,marginBottom:7}}>✅ Decision Simulator — Positive Actions</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:9}}>
+                  {SCENARIOS_DEF.filter(s=>s.type==="decision").map(s=>(
+                    <button key={s.id} onClick={()=>{
+                      const newId = s.id===scenario ? null : s.id;
+                      setScenario(newId);
+                      if (newId && scores) {
+                        const base = buildActions(scores, assets, liabs, profile);
+                        setActions(buildActionsForScenario(newId, base));
+                        setCardIdx(0);
+                      }
+                    }} style={{padding:"13px 8px",borderRadius:12,border:`2px solid ${scenario===s.id?s.color:bdr}`,background:scenario===s.id?s.bg:card,cursor:"pointer",transition:"all 0.22s",display:"flex",flexDirection:"column",alignItems:"center",gap:6,boxShadow:scenario===s.id?`0 0 16px ${s.color}33`:"none",fontFamily:"'Sora',sans-serif"}}>
+                      <span style={{fontSize:22}}>{s.icon}</span>
+                      <strong style={{fontSize:10,color:scenario===s.id?s.color:txt}}>{s.label}</strong>
+                      <div style={{fontSize:9,color:sub,textAlign:"center"}}>{s.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Results + Sliders ── */}
+              {scenario&&sd&&impact&&(
+                <div style={{display:"grid",gridTemplateColumns:"220px 1fr",gap:11,animation:"fadeUp 0.3s ease",marginBottom:11}}>
+
+                  {/* Slider panel */}
+                  <div style={{background:card,borderRadius:14,padding:18,border:`2px solid ${sd.color}44`}}>
+                    <div style={{fontSize:11,fontWeight:800,color:txt,marginBottom:14,display:"flex",alignItems:"center",gap:7}}>
+                      <span>{sd.icon}</span> Adjust Parameters
+                    </div>
+
+                    {/* — CRASH sliders — */}
+                    {scenario==="crash"&&[
+                      {label:"Equity drop",key:"equityDrop",min:5,max:60,step:5,fmt:v=>`${v}%`},
+                      {label:"Crypto drop",key:"cryptoDrop",min:10,max:90,step:10,fmt:v=>`${v}%`},
+                    ].map(sl=>(
+                      <div key={sl.key} style={{marginBottom:14}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                          <span style={{fontSize:10,fontWeight:700,color:sub}}>{sl.label}</span>
+                          <strong style={{fontSize:11,color:sd.color}}>{sl.fmt(params.crash[sl.key])}</strong>
+                        </div>
+                        <input type="range" min={sl.min} max={sl.max} step={sl.step}
+                          value={params.crash[sl.key]}
+                          onChange={e=>setParams(p=>({...p,crash:{...p.crash,[sl.key]:+e.target.value}}))}
+                          style={{width:"100%",accentColor:sd.color}}/>
+                        <div style={{display:"flex",justifyContent:"space-between",fontSize:8,color:"#cbd5e1",marginTop:2}}>
+                          <span>{sl.min}%</span><span>{sl.max}%</span>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* — JOB LOSS slider — */}
+                    {scenario==="jobloss"&&(
+                      <div style={{marginBottom:14}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                          <span style={{fontSize:10,fontWeight:700,color:sub}}>Months without income</span>
+                          <strong style={{fontSize:11,color:sd.color}}>{params.jobloss.months} mo.</strong>
+                        </div>
+                        <input type="range" min={1} max={12} step={1}
+                          value={params.jobloss.months}
+                          onChange={e=>setParams(p=>({...p,jobloss:{months:+e.target.value}}))}
+                          style={{width:"100%",accentColor:sd.color}}/>
+                        <div style={{display:"flex",justifyContent:"space-between",fontSize:8,color:"#cbd5e1",marginTop:2}}>
+                          <span>1 mo.</span><span>12 mo.</span>
+                        </div>
+                        <div style={{marginTop:9,background:`${sd.color}12`,borderRadius:7,padding:"6px 9px",fontSize:10,fontWeight:700,color:sd.color}}>
+                          Salary lost: {fc(parseFloat(profile.salary)||6000,cur,true)}/mo
+                        </div>
+                      </div>
+                    )}
+
+                    {/* — PROPERTY sliders — */}
+                    {scenario==="property"&&[
+                      {label:"Cash outlay",    key:"cashOut",     min:5000,  max:50000,  step:5000,  fmt:v=>fc(v,cur,true)},
+                      {label:"Mortgage added", key:"mortgageAdd", min:10000, max:300000, step:10000, fmt:v=>fc(v,cur,true)},
+                      {label:"Property equity",key:"propAdd",     min:10000, max:300000, step:10000, fmt:v=>fc(v,cur,true)},
+                    ].map(sl=>(
+                      <div key={sl.key} style={{marginBottom:14}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                          <span style={{fontSize:10,fontWeight:700,color:sub}}>{sl.label}</span>
+                          <strong style={{fontSize:11,color:sd.color}}>{sl.fmt(params.property[sl.key])}</strong>
+                        </div>
+                        <input type="range" min={sl.min} max={sl.max} step={sl.step}
+                          value={params.property[sl.key]}
+                          onChange={e=>setParams(p=>({...p,property:{...p.property,[sl.key]:+e.target.value}}))}
+                          style={{width:"100%",accentColor:sd.color}}/>
+                      </div>
+                    ))}
+
+                    {/* — FUND slider — */}
+                    {scenario==="fund"&&(
+                      <div style={{marginBottom:14}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                          <span style={{fontSize:10,fontWeight:700,color:sub}}>Cash to add</span>
+                          <strong style={{fontSize:11,color:sd.color}}>{fc(params.fund.cashAdd,cur,true)}</strong>
+                        </div>
+                        <input type="range" min={1000} max={50000} step={1000}
+                          value={params.fund.cashAdd}
+                          onChange={e=>setParams(p=>({...p,fund:{cashAdd:+e.target.value}}))}
+                          style={{width:"100%",accentColor:sd.color}}/>
+                        <div style={{display:"flex",justifyContent:"space-between",fontSize:8,color:"#cbd5e1",marginTop:2}}>
+                          <span>{fc(1000,cur,true)}</span><span>{fc(50000,cur,true)}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* — DIVERSIFY sliders — */}
+                    {scenario==="diversify"&&[
+                      {label:"Stocks cut",  key:"stocksCut", min:5,  max:40, step:5,  fmt:v=>`${v}%`},
+                      {label:"Gold boost",  key:"goldBoost", min:5,  max:50, step:5,  fmt:v=>`+${v}%`},
+                      {label:"Cash boost",  key:"cashBoost", min:5,  max:30, step:5,  fmt:v=>`+${v}%`},
+                    ].map(sl=>(
+                      <div key={sl.key} style={{marginBottom:14}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                          <span style={{fontSize:10,fontWeight:700,color:sub}}>{sl.label}</span>
+                          <strong style={{fontSize:11,color:sd.color}}>{sl.fmt(params.diversify[sl.key])}</strong>
+                        </div>
+                        <input type="range" min={sl.min} max={sl.max} step={sl.step}
+                          value={params.diversify[sl.key]}
+                          onChange={e=>setParams(p=>({...p,diversify:{...p.diversify,[sl.key]:+e.target.value}}))}
+                          style={{width:"100%",accentColor:sd.color}}/>
+                      </div>
+                    ))}
+
+                    {/* — DEBT PAY sliders — */}
+                    {scenario==="debtpay"&&[
+                      {label:"Loan to repay",   key:"loanCut",   min:1000, max:50000, step:1000, fmt:v=>fc(v,cur,true)},
+                      {label:"Credit to clear", key:"creditCut", min:500,  max:20000, step:500,  fmt:v=>fc(v,cur,true)},
+                    ].map(sl=>(
+                      <div key={sl.key} style={{marginBottom:14}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                          <span style={{fontSize:10,fontWeight:700,color:sub}}>{sl.label}</span>
+                          <strong style={{fontSize:11,color:sd.color}}>{sl.fmt(params.debtpay[sl.key])}</strong>
+                        </div>
+                        <input type="range" min={sl.min} max={sl.max} step={sl.step}
+                          value={params.debtpay[sl.key]}
+                          onChange={e=>setParams(p=>({...p,debtpay:{...p.debtpay,[sl.key]:+e.target.value}}))}
+                          style={{width:"100%",accentColor:sd.color}}/>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Results cards */}
+                  <div style={{display:"flex",flexDirection:"column",gap:11}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:11}}>
+                      {/* Net Worth */}
                       <div style={{background:sd.bg,borderRadius:13,padding:16,border:`2px solid ${sd.color}33`,textAlign:"center"}}>
-                        <Lbl style={{marginBottom:5}}>Portfolio Impact</Lbl>
+                        <Lbl style={{marginBottom:5}}>Net Worth Impact</Lbl>
                         <div style={{fontSize:21,fontWeight:800,color:impact.nw<0?"#ef4444":"#10b981",marginBottom:3}}>{impact.nw>0?"+":""}{fc(impact.nw,cur)}</div>
                         <div style={{fontSize:9,fontWeight:700,color:sub}}>{fc(netWorth,cur,true)} → {fc(netWorth+impact.nw,cur,true)}</div>
                       </div>
-                      <div style={{background:card,borderRadius:13,padding:16,border:`1px solid ${bdr}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6}}>
+                      {/* Wellness ring */}
+                      <div style={{background:card,borderRadius:13,padding:16,border:`1px solid ${bdr}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}>
                         <Lbl style={{marginBottom:0}}>Wellness Score</Lbl>
-                        {(() => {
-                          const newScore = Math.max(0, Math.min(100, wellness + impact.sc));
-                          const r=34, circ=2*Math.PI*r, sz=90;
-                          const dashOld=(wellness/100)*circ, dashNew=(newScore/100)*circ;
-                          const col = newScore>=75?"#10b981":newScore>=55?"#f59e0b":"#ef4444";
-                          return (
-                            <div style={{position:"relative",width:sz,height:sz}}>
-                              <svg width={sz} height={sz} viewBox={`0 0 ${sz} ${sz}`}>
-                                <circle cx={sz/2} cy={sz/2} r={r} fill="none" stroke="#e2e8f0" strokeWidth="7"/>
-                                <circle cx={sz/2} cy={sz/2} r={r} fill="none" stroke="#e2e8f0" strokeWidth="7"
-                                  strokeDasharray={`${dashOld} ${circ-dashOld}`} strokeLinecap="round"
-                                  transform={`rotate(-90 ${sz/2} ${sz/2})`} opacity="0.35"/>
-                                <circle cx={sz/2} cy={sz/2} r={r} fill="none" stroke={col} strokeWidth="7"
-                                  strokeDasharray={`${dashNew} ${circ-dashNew}`} strokeLinecap="round"
-                                  transform={`rotate(-90 ${sz/2} ${sz/2})`}
-                                  style={{transition:"stroke-dasharray 0.8s ease"}}/>
-                                <text x={sz/2} y={sz/2-3} textAnchor="middle" fontSize="18" fontWeight="800"
-                                  fill={col} fontFamily="'Sora',sans-serif">{newScore}</text>
-                                <text x={sz/2} y={sz/2+11} textAnchor="middle" fontSize="7" fill="#94a3b8"
-                                  fontFamily="'Sora',sans-serif">/ 100</text>
-                              </svg>
-                            </div>
-                          );
+                        {(()=>{
+                          const ns=impact.newScore||Math.max(0,Math.min(100,wellness+impact.sc));
+                          const r=30,circ=2*Math.PI*r,sz=80;
+                          const dOld=(wellness/100)*circ,dNew=(ns/100)*circ;
+                          const col=ns>=75?"#10b981":ns>=55?"#f59e0b":"#ef4444";
+                          return(<div style={{position:"relative",width:sz,height:sz}}>
+                            <svg width={sz} height={sz} viewBox={`0 0 ${sz} ${sz}`}>
+                              <circle cx={sz/2} cy={sz/2} r={r} fill="none" stroke="#e2e8f0" strokeWidth="7"/>
+                              <circle cx={sz/2} cy={sz/2} r={r} fill="none" stroke="#e2e8f0" strokeWidth="7" strokeDasharray={`${dOld} ${circ-dOld}`} strokeLinecap="round" transform={`rotate(-90 ${sz/2} ${sz/2})`} opacity="0.3"/>
+                              <circle cx={sz/2} cy={sz/2} r={r} fill="none" stroke={col} strokeWidth="7" strokeDasharray={`${dNew} ${circ-dNew}`} strokeLinecap="round" transform={`rotate(-90 ${sz/2} ${sz/2})`} style={{transition:"stroke-dasharray 0.8s ease"}}/>
+                              <text x={sz/2} y={sz/2-2} textAnchor="middle" fontSize="16" fontWeight="800" fill={col} fontFamily="'Sora',sans-serif">{ns}</text>
+                              <text x={sz/2} y={sz/2+10} textAnchor="middle" fontSize="7" fill="#94a3b8" fontFamily="'Sora',sans-serif">/100</text>
+                            </svg>
+                          </div>);
                         })()}
-                        <div style={{fontSize:11,fontWeight:800,color:impact.sc<0?"#ef4444":"#10b981"}}>
-                          {impact.sc>0?"+":""}{impact.sc} pts
-                        </div>
-                        <div style={{fontSize:9,color:sub,textAlign:"center"}}>
-                          {wellness} → {Math.max(0,Math.min(100,wellness+impact.sc))}
-                        </div>
+                        <div style={{fontSize:11,fontWeight:800,color:impact.sc<0?"#ef4444":"#10b981"}}>{impact.sc>0?"+":""}{impact.sc} pts</div>
+                        <div style={{fontSize:9,color:sub}}>{wellness} → {impact.newScore||Math.max(0,Math.min(100,wellness+impact.sc))}</div>
                       </div>
-                      <div style={{background:card,borderRadius:13,padding:16,border:`1px solid ${bdr}`}}>
-                        <div style={{fontSize:10,fontWeight:800,color:txt,marginBottom:7}}>Breakdown</div>
-                        {impact.details.map((d,i)=>(
-                          <div key={i} style={{fontSize:9,fontWeight:700,color:d.includes("−")||d.includes("-")||d.includes("depleted")?"#ef4444":"#10b981",padding:"3px 0",borderBottom:i<impact.details.length-1?`1px solid ${bdr}`:"none"}}>{d}</div>
-                        ))}
+                      {/* Survival Runway */}
+                      <div style={{background:card,borderRadius:13,padding:16,border:`1px solid ${bdr}`,textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}>
+                        <Lbl style={{marginBottom:0}}>Survival Runway</Lbl>
+                        <div style={{fontSize:21,fontWeight:800,color:impact.survivalAfter>=6?"#10b981":impact.survivalAfter>=3?"#f59e0b":"#ef4444"}}>{impact.survivalAfter} mo.</div>
+                        <div style={{fontSize:9,color:sub}}>{scores.survivalMonths} → {impact.survivalAfter} mo.</div>
+                        <div style={{fontSize:9,fontWeight:700,background:impact.survivalAfter>=6?"#dcfce7":impact.survivalAfter>=3?"#fef3c7":"#fee2e2",color:impact.survivalAfter>=6?"#16a34a":impact.survivalAfter>=3?"#d97706":"#dc2626",padding:"2px 8px",borderRadius:99}}>
+                          {impact.survivalAfter>=6?"Strong":impact.survivalAfter>=3?"Moderate":"Fragile"} runway
+                        </div>
                       </div>
                     </div>
-                    <div style={{background:`${sd.color}0c`,borderRadius:12,padding:16,border:`1px solid ${sd.color}33`,display:"flex",gap:11,alignItems:"flex-start"}}>
-                      <span style={{fontSize:18,flexShrink:0}}>💡</span>
-                      <div style={{flex:1}}>
-                        <div style={{fontSize:11,fontWeight:800,color:txt,marginBottom:4}}>AI Recommendation</div>
-                        <div style={{fontSize:11,color:sub,lineHeight:1.65}}>
-                          {scenario==="crash"&&`With a ${params.crash.equityDrop}% equity drop, a tech-heavy portfolio takes a disproportionate hit. Diversifying into global ETFs now could reduce this impact by ~40%.`}
-                          {scenario==="jobloss"&&`${params.jobloss.months} months without income would exhaust your emergency fund in ${scores?.liqMonths||2.4} months. Building a ${fc((profile.salary||6000)*6,cur)} buffer is your single most critical action.`}
-                          {scenario==="rates"&&`A ${params.rates.hikePct}% rate hike raises mortgage costs and reduces property values. Consider fixing your mortgage rate for 3–5 years as a hedge.`}
-                          {scenario==="retirement"&&`Your wealth trajectory looks healthy. Increasing monthly savings by ${fc(200,cur,true)} more would add ~${fc(200*12*params.retirement.years*1.5,cur,true)} at retirement.`}
-                          {scenario==="property"&&`A ${fc(params.property.price,cur,true)} purchase is feasible but will critically reduce your liquidity. Fully fund your emergency savings first.`}
-                        </div>
-                      </div>
-                      <button onClick={()=>setScreen("actions")} style={{padding:"7px 12px",background:`linear-gradient(135deg,${accentPrimary},#6366f1)`,color:"white",border:"none",borderRadius:8,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif",flexShrink:0}}>Fix It →</button>
+                    {/* Breakdown */}
+                    <div style={{background:card,borderRadius:13,padding:16,border:`1px solid ${bdr}`,display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:"4px 16px"}}>
+                      {impact.details.map((d,i)=>(
+                        <div key={i} style={{fontSize:10,fontWeight:700,padding:"5px 0",borderBottom:`1px solid ${bdr}`,
+                          color:d.includes("−")||d.startsWith("-")?"#ef4444":d.includes("+")?"#10b981":sub}}>{d}</div>
+                      ))}
+                    </div>
+                    {/* Analysis bar */}
+                    <div style={{background:`${sd.color}0c`,borderRadius:12,padding:14,border:`1px solid ${sd.color}33`,display:"flex",gap:11,alignItems:"center"}}>
+                      <span style={{fontSize:18,flexShrink:0}}>{sd.type==="decision"?"✅":"💡"}</span>
+                      <div style={{flex:1,fontSize:11,color:sub,lineHeight:1.6}}>{impact.message}</div>
+                      <button onClick={()=>setScreen("actions")} style={{padding:"7px 14px",background:`linear-gradient(135deg,${accentPrimary},#6366f1)`,color:"white",border:"none",borderRadius:8,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif",flexShrink:0,whiteSpace:"nowrap"}}>Go to Actions →</button>
                     </div>
                   </div>
                 </div>
               )}
-              {!scenario&&<div style={{textAlign:"center",padding:"44px",background:card,borderRadius:16,border:`1px solid ${bdr}`}}>
-                <div style={{fontSize:36,marginBottom:9}}>⟁</div>
-                <strong style={{fontSize:13,color:txt}}>Select a scenario above to begin</strong>
-                <div style={{fontSize:11,color:sub,marginTop:5}}>Adjust parameters with sliders and see real-time financial impact</div>
-              </div>}
+
+              {/* No scenario selected — show baseline stats */}
+              {!scenario&&scores&&(
+                <div style={{background:card,borderRadius:16,padding:22,border:`1px solid ${bdr}`,display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:11}}>
+                  {[
+                    {label:"Wealth Score",    value:wellness,                      color:sc(wellness),   sub:"Overall health"},
+                    {label:"Resilience Score",value:scores.resilience,             color:sc(scores.resilience), sub:`Fragility: ${scores.fragility}`},
+                    {label:"Survival Runway", value:`${scores.survivalMonths} mo.`,color:scores.survivalMonths>=6?"#10b981":scores.survivalMonths>=3?"#f59e0b":"#ef4444", sub:scores.survivalLabel},
+                    {label:"Confidence",      value:scores.confidenceLabel,        color:scores.confidence>=80?"#10b981":scores.confidence>=50?"#f59e0b":"#ef4444", sub:`${scores.confidence}% complete`},
+                    {label:"Debt Load",       value:scores.debtLoad,               color:sc(scores.debtLoad),   sub:`Ratio: ${scores.debtRatioPct}%`},
+                    {label:"Protection",      value:scores.protection,             color:sc(scores.protection), sub:`${scores.coverageRatio}× income`},
+                  ].map((m,i)=>(
+                    <div key={i} style={{textAlign:"center",padding:"12px 8px",background:"#f8fafc",borderRadius:10,border:`1px solid ${bdr}`}}>
+                      <div style={{fontSize:9,fontWeight:700,color:sub,marginBottom:4}}>{m.label}</div>
+                      <div style={{fontSize:18,fontWeight:800,color:m.color}}>{m.value}</div>
+                      <div style={{fontSize:9,color:sub,marginTop:2}}>{m.sub}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -2262,17 +2715,23 @@ export default function App() {
               {histTab&&(
                 <div style={{maxWidth:540,margin:"0 auto"}}>
                   {done.length===0
-                    ?<div style={{textAlign:"center",padding:"44px",background:card,borderRadius:16,border:`1px solid ${bdr}`}}><div style={{fontSize:30,marginBottom:9}}>📋</div><strong style={{fontSize:12,color:txt}}>No completed actions yet</strong></div>
-                    :done.slice(0,5).map((a,i)=>(
-                      <div key={i} style={{display:"flex",gap:11,padding:"13px 16px",background:card,borderRadius:13,border:`1px solid ${bdr}`,marginBottom:7,animation:"fadeUp 0.3s ease"}}>
-                        <div style={{width:38,height:38,borderRadius:10,background:`${a.color}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:19,flexShrink:0}}>{a.icon}</div>
-                        <div style={{flex:1}}>
-                          <div style={{display:"flex",justifyContent:"space-between"}}><strong style={{fontSize:12,color:txt}}>{a.title}</strong><Tag color="#10b981">✓ Done</Tag></div>
-                          <div style={{fontSize:9,fontWeight:600,color:sub,marginTop:2}}>{a.category} · {a.doneAt}</div>
-                          <div style={{fontSize:10,fontWeight:800,color:a.color,marginTop:3}}>{a.impact}</div>
+                    ?<div style={{textAlign:"center",padding:"44px",background:card,borderRadius:16,border:`1px solid ${bdr}`}}><div style={{fontSize:30,marginBottom:9}}>📋</div><strong style={{fontSize:12,color:txt}}>No completed actions yet</strong><div style={{fontSize:10,color:sub,marginTop:5}}>Actions you mark as done will appear here (last 5).</div></div>
+                    :<>
+                      <div style={{fontSize:10,fontWeight:700,color:sub,marginBottom:10}}>Showing {done.length} most recent completed action{done.length!==1?"s":""}</div>
+                      {done.map((a,i)=>(
+                        <div key={i} style={{display:"flex",gap:11,padding:"13px 16px",background:card,borderRadius:13,border:`1px solid ${bdr}`,marginBottom:7,animation:"fadeUp 0.3s ease",borderLeft:`4px solid ${a.color}`}}>
+                          <div style={{width:38,height:38,borderRadius:10,background:`${a.color}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:19,flexShrink:0}}>{a.icon}</div>
+                          <div style={{flex:1}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                              <strong style={{fontSize:12,color:txt}}>{a.title}</strong>
+                              <span style={{fontSize:9,fontWeight:800,color:"#16a34a",background:"#dcfce7",padding:"2px 8px",borderRadius:99,flexShrink:0}}>✓ Done</span>
+                            </div>
+                            <div style={{fontSize:9,fontWeight:600,color:sub,marginTop:2}}>{a.category} · Completed {a.doneAt}</div>
+                            <div style={{fontSize:10,fontWeight:700,color:a.color,marginTop:4}}>{a.outcome}</div>
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      ))}
+                    </>
                   }
                 </div>
               )}
@@ -2398,14 +2857,15 @@ export default function App() {
               <>
                 <Lbl style={{marginBottom:9}}>Edit Details</Lbl>
                 {[
-                  {l:"Full Name",        k:"name",             t:"text"},
-                  {l:"Date of Birth",    k:"dob",              t:"date"},
-                  {l:"Email",           k:"email",            t:"email"},
-                  {l:"Phone",           k:"phone",            t:"tel"},
-                  {l:"Employer",        k:"employer",         t:"text"},
-                  {l:"Monthly Salary",  k:"salary",           t:"number"},
-                  {l:"Monthly Expenses",k:"monthlyExpenses",  t:"number"},
-                  {l:"Address",         k:"address",          t:"text"},
+                  {l:"Full Name",           k:"name",              t:"text"},
+                  {l:"Date of Birth",       k:"dob",               t:"date"},
+                  {l:"Email",              k:"email",             t:"email"},
+                  {l:"Phone",              k:"phone",             t:"tel"},
+                  {l:"Employer",           k:"employer",          t:"text"},
+                  {l:"Monthly Salary",     k:"salary",            t:"number"},
+                  {l:"Monthly Expenses",   k:"monthlyExpenses",   t:"number"},
+                  {l:"Insurance Coverage", k:"insuranceCoverage", t:"number"},
+                  {l:"Address",            k:"address",           t:"text"},
                 ].map(f=>(
                   <div key={f.k} style={{marginBottom:10}}>
                     <Lbl>{f.l}</Lbl>
