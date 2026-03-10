@@ -631,14 +631,14 @@ function OB_Input({ label, value, onChange, type="text", placeholder="", require
   return (
     <div style={{ marginBottom:14 }}>
       <label style={{ display:"block", fontSize:11, fontWeight:700, color:"#374151", marginBottom:5 }}>
-        {label}{required && <span style={{color:"#dc2626"}}> *</span>}
+        {label}{required && <span style={{color:"#1d4ed8"}}> *</span>}
       </label>
       <input
         type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
         style={{ width:"100%", padding:"10px 14px", borderRadius:10, border:"1px solid #e5e7eb",
           background:"white", color:"#111827", fontSize:13, fontFamily:"'Sora',sans-serif",
           outline:"none", transition:"border-color 0.2s" }}
-        onFocus={e=>e.target.style.borderColor="#dc2626"}
+        onFocus={e=>e.target.style.borderColor="#1d4ed8"}
         onBlur={e=>e.target.style.borderColor="#e5e7eb"}
       />
       {hint && <div style={{ fontSize:10, color:"#9ca3af", marginTop:3 }}>{hint}</div>}
@@ -650,7 +650,7 @@ function OB_Select({ label, value, onChange, options, required=false }) {
   return (
     <div style={{ marginBottom:14 }}>
       <label style={{ display:"block", fontSize:11, fontWeight:700, color:"#374151", marginBottom:5 }}>
-        {label}{required && <span style={{color:"#dc2626"}}> *</span>}
+        {label}{required && <span style={{color:"#1d4ed8"}}> *</span>}
       </label>
       <select value={value} onChange={e=>onChange(e.target.value)}
         style={{ width:"100%", padding:"10px 14px", borderRadius:10, border:"1px solid #e5e7eb",
@@ -665,18 +665,133 @@ function OB_ProgressBar({ step }) {
   return (
     <div style={{ marginBottom:28 }}>
       <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-        <span style={{ fontSize:10, fontWeight:700, color:"#dc2626" }}>Step {step} of {TOTAL_STEPS}</span>
+        <span style={{ fontSize:10, fontWeight:700, color:"#1d4ed8" }}>Step {step} of {TOTAL_STEPS}</span>
         <span style={{ fontSize:10, color:"#9ca3af" }}>{Math.round((step/TOTAL_STEPS)*100)}% complete</span>
       </div>
-      <div style={{ height:4, borderRadius:4, background:"#f3f4f6", overflow:"hidden" }}>
-        <div style={{ height:"100%", borderRadius:4, background:"linear-gradient(90deg,#dc2626,#f87171)",
+      <div style={{ height:4, borderRadius:4, background:"#dbeafe", overflow:"hidden" }}>
+        <div style={{ height:"100%", borderRadius:4, background:"linear-gradient(90deg,#1d4ed8,#60a5fa)",
           width:`${(step/TOTAL_STEPS)*100}%`, transition:"width 0.5s ease" }}/>
       </div>
       <div style={{ display:"flex", justifyContent:"space-between", marginTop:6 }}>
         {["Identity","Finances","Assets","Liabilities","Connect","Done"].map((s,i)=>(
           <span key={i} style={{ fontSize:9, fontWeight: i<step?"700":"400",
-            color: i<step?"#dc2626":i===step-1?"#374151":"#d1d5db" }}>{s}</span>
+            color: i<step?"#1d4ed8":i===step-1?"#374151":"#d1d5db" }}>{s}</span>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── LOGIN SCREEN ─────────────────────────────────────────────────────────────
+function LoginScreen({ profile, onLogin, onCreateAccount }) {
+  const [email, setEmail] = React.useState("");
+  const [pw,    setPw]    = React.useState("");
+  const [err,   setErr]   = React.useState("");
+  const [show,  setShow]  = React.useState(false);
+
+  const attempt = () => {
+    const emailMatch = email.trim().toLowerCase() === (profile?.email || "").toLowerCase();
+    if (!emailMatch) { setErr("No account found with that email address."); return; }
+    const stored  = profile?.passwordHash;
+    const entered = btoa(unescape(encodeURIComponent(pw)));
+    if (!stored || entered === stored) { onLogin(); }
+    else { setErr("Incorrect password. Please try again."); setPw(""); }
+  };
+
+  const handleKeyDown = (e) => { if (e.key === "Enter") attempt(); };
+
+  const inputBase = (hasErr) => ({
+    width:"100%", padding:"11px 14px", borderRadius:11,
+    border:`1.5px solid ${hasErr?"#ef4444":"#e2e8f0"}`,
+    background:"#f8fafc", color:"#0f172a", fontSize:13,
+    fontFamily:"'Sora',sans-serif", outline:"none",
+    boxSizing:"border-box", transition:"border-color 0.2s"
+  });
+
+  return (
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#eff6ff 0%,#dbeafe 40%,#e0f2fe 100%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 16px",fontFamily:"'Sora','Segoe UI',sans-serif",position:"relative"}}>
+      <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0;}@keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}`}</style>
+
+      {/* Create Account button — top right */}
+      <div style={{position:"absolute",top:20,right:24}}>
+        <button onClick={onCreateAccount}
+          style={{padding:"9px 20px",borderRadius:10,border:"1.5px solid #1d4ed8",background:"white",color:"#1d4ed8",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif",boxShadow:"0 2px 12px rgba(29,78,216,0.12)",transition:"all 0.2s"}}
+          onMouseEnter={e=>{e.currentTarget.style.background="#1d4ed8";e.currentTarget.style.color="white";}}
+          onMouseLeave={e=>{e.currentTarget.style.background="white";e.currentTarget.style.color="#1d4ed8";}}>
+          + Create Account
+        </button>
+      </div>
+
+      {/* Logo */}
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:36}}>
+        <div style={{width:42,height:42,background:"linear-gradient(135deg,#1d4ed8,#3b82f6)",borderRadius:13,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,boxShadow:"0 4px 18px rgba(29,78,216,0.35)"}}>⬡</div>
+        <div>
+          <div style={{fontSize:22,fontWeight:800,color:"#0f172a",letterSpacing:"-0.5px"}}>Finora</div>
+          <div style={{fontSize:9,color:"#64748b",letterSpacing:1}}>WEALTH WELLNESS HUB · SG</div>
+        </div>
+      </div>
+
+      {/* Card */}
+      <div style={{background:"white",borderRadius:24,padding:"40px 44px",width:"100%",maxWidth:420,boxShadow:"0 24px 64px rgba(0,0,0,0.10)",border:"1px solid #e2e8f0",animation:"fadeUp 0.35s ease"}}>
+        <h1 style={{fontSize:22,fontWeight:800,color:"#0f172a",marginBottom:4}}>Welcome back</h1>
+        <p style={{fontSize:12,color:"#94a3b8",marginBottom:28}}>Sign in to your Finora account</p>
+
+        {/* Email input */}
+        <div style={{marginBottom:14,textAlign:"left"}}>
+          <label style={{display:"block",fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:.8,marginBottom:7}}>Email Address</label>
+          <input
+            type="email"
+            value={email}
+            onChange={e=>{setEmail(e.target.value);setErr("");}}
+            onKeyDown={handleKeyDown}
+            placeholder="you@email.com"
+            autoFocus
+            style={inputBase(false)}
+            onFocus={e=>e.target.style.borderColor="#1d4ed8"}
+            onBlur={e=>e.target.style.borderColor="#e2e8f0"}
+          />
+        </div>
+
+        {/* Password input */}
+        <div style={{marginBottom:6,textAlign:"left"}}>
+          <label style={{display:"block",fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:.8,marginBottom:7}}>Password</label>
+          <div style={{position:"relative"}}>
+            <input
+              type={show?"text":"password"}
+              value={pw}
+              onChange={e=>{setPw(e.target.value);setErr("");}}
+              onKeyDown={handleKeyDown}
+              placeholder="Enter your password"
+              style={{...inputBase(!!err), paddingRight:40}}
+              onFocus={e=>e.target.style.borderColor="#1d4ed8"}
+              onBlur={e=>e.target.style.borderColor=err?"#ef4444":"#e2e8f0"}
+            />
+            <button type="button" onClick={()=>setShow(s=>!s)}
+              style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:15,color:"#94a3b8",lineHeight:1}}>
+              {show?"🙈":"👁"}
+            </button>
+          </div>
+        </div>
+
+        {err && <div style={{fontSize:10,color:"#ef4444",fontWeight:600,marginBottom:12}}>{err}</div>}
+
+        <button onClick={attempt}
+          style={{width:"100%",padding:"13px",marginTop:10,borderRadius:12,border:"none",background:"linear-gradient(135deg,#1d4ed8,#3b82f6)",color:"white",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"'Sora',sans-serif",boxShadow:"0 6px 20px rgba(29,78,216,0.30)",transition:"opacity 0.2s",letterSpacing:.3}}>
+          Sign In →
+        </button>
+
+        <div style={{marginTop:22,padding:"14px 16px",background:"#f8fafc",borderRadius:10,border:"1px solid #e2e8f0",textAlign:"left"}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:2}}>🔒 Your data never leaves your device</div>
+          <div style={{fontSize:10,color:"#94a3b8"}}>All information is stored locally in your browser.</div>
+        </div>
+      </div>
+
+      <div style={{marginTop:20,fontSize:11,color:"#94a3b8"}}>
+        Don't have an account?{" "}
+        <button onClick={onCreateAccount} style={{color:"#1d4ed8",background:"none",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:"'Sora',sans-serif",textDecoration:"underline"}}>
+          Create one for free
+        </button>
       </div>
     </div>
   );
@@ -776,10 +891,10 @@ function OnboardingWizard({ onComplete }) {
 
   const cardStyle = { background:"white", borderRadius:24, padding:"36px 40px",
     width:"100%", maxWidth:580, boxShadow:"0 24px 64px rgba(0,0,0,0.12)",
-    border:"1px solid #fecaca", animation:"fadeUp 0.35s ease" };
+    border:"1px solid #bfdbfe", animation:"fadeUp 0.35s ease" };
 
   const btnPrimary = { padding:"12px 28px", borderRadius:12, border:"none",
-    background:"linear-gradient(135deg,#dc2626,#b91c1c)", color:"white",
+    background:"linear-gradient(135deg,#1d4ed8,#1e40af)", color:"white",
     fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"'Sora',sans-serif",
     transition:"opacity 0.2s" };
 
@@ -788,7 +903,7 @@ function OnboardingWizard({ onComplete }) {
     fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"'Sora',sans-serif" };
 
   return (
-    <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#fff5f5 0%,#fef2f2 50%,#fff1f1 100%)",
+    <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#eff6ff 0%,#dbeafe 40%,#e0f2fe 100%)",
       display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
       padding:"24px 16px", fontFamily:"'Sora','Segoe UI',sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
@@ -796,16 +911,16 @@ function OnboardingWizard({ onComplete }) {
         *{box-sizing:border-box;margin:0;padding:0;}
         @keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
         @keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.04);}}
-        input:focus,select:focus{border-color:#dc2626!important;outline:none!important;box-shadow:0 0 0 3px rgba(220,38,38,0.12)!important;}
+        input:focus,select:focus{border-color:#1d4ed8!important;outline:none!important;box-shadow:0 0 0 3px rgba(29,78,216,0.12)!important;}
       `}</style>
 
       {/* Logo strip */}
       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:32 }}>
-        <div style={{ width:38, height:38, background:"linear-gradient(135deg,#dc2626,#991b1b)",
+        <div style={{ width:38, height:38, background:"linear-gradient(135deg,#1d4ed8,#3b82f6)",
           borderRadius:11, display:"flex", alignItems:"center", justifyContent:"center",
-          fontSize:18, boxShadow:"0 4px 14px rgba(220,38,38,0.35)" }}>⬡</div>
+          fontSize:18, boxShadow:"0 4px 14px rgba(29,78,216,0.35)" }}>⬡</div>
         <div>
-          <div style={{ fontSize:18, fontWeight:800, color:"#1a0505" }}>WealthWell</div>
+          <div style={{ fontSize:18, fontWeight:800, color:"#0f172a", letterSpacing:"-0.3px" }}>Finora</div>
           <div style={{ fontSize:10, color:"#9ca3af" }}>WEALTH WELLNESS HUB · SG</div>
         </div>
       </div>
@@ -814,12 +929,12 @@ function OnboardingWizard({ onComplete }) {
       {step === 0 && (
         <div style={{ ...cardStyle, textAlign:"center", maxWidth:520 }}>
           <div style={{ fontSize:48, marginBottom:18, animation:"pulse 2s infinite" }}>⬡</div>
-          <h1 style={{ fontSize:28, fontWeight:800, color:"#1a0505", marginBottom:10, lineHeight:1.2 }}>
+          <h1 style={{ fontSize:28, fontWeight:800, color:"#0f172a", marginBottom:10, lineHeight:1.2 }}>
             Your complete financial<br/>command centre
           </h1>
           <p style={{ fontSize:13, color:"#6b7280", lineHeight:1.7, marginBottom:28, maxWidth:400, margin:"0 auto 28px" }}>
             Track every asset. Measure your wellness. Simulate your future.<br/>
-            <strong style={{color:"#dc2626"}}>Built for Singapore. Designed for clarity.</strong>
+            <strong style={{color:"#1d4ed8"}}>Built for Singapore. Designed for clarity.</strong>
           </p>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:32 }}>
             {[
@@ -827,16 +942,16 @@ function OnboardingWizard({ onComplete }) {
               { icon:"🧠", t:"AI-Powered Insights", d:"Personalised to you" },
               { icon:"🔬", t:"Scenario Lab", d:"Test before it happens" },
             ].map((f,i)=>(
-              <div key={i} style={{ padding:"14px 12px", borderRadius:14, background:"#fff5f5",
-                border:"1px solid #fecaca", textAlign:"center" }}>
+              <div key={i} style={{ padding:"14px 12px", borderRadius:14, background:"#eff6ff",
+                border:"1px solid #bfdbfe", textAlign:"center" }}>
                 <div style={{ fontSize:22, marginBottom:6 }}>{f.icon}</div>
-                <div style={{ fontSize:11, fontWeight:700, color:"#1a0505", marginBottom:3 }}>{f.t}</div>
+                <div style={{ fontSize:11, fontWeight:700, color:"#1e3a8a", marginBottom:3 }}>{f.t}</div>
                 <div style={{ fontSize:10, color:"#9ca3af" }}>{f.d}</div>
               </div>
             ))}
           </div>
           <button onClick={()=>setStep(1)} style={{ ...btnPrimary, width:"100%", padding:"14px", fontSize:14,
-            boxShadow:"0 6px 20px rgba(220,38,38,0.35)" }}>
+            boxShadow:"0 6px 20px rgba(29,78,216,0.35)" }}>
             Get Started →
           </button>
           <div style={{ marginTop:14, fontSize:11, color:"#9ca3af" }}>
@@ -849,7 +964,7 @@ function OnboardingWizard({ onComplete }) {
       {step === 1 && (
         <div style={cardStyle}>
           <OB_ProgressBar step={1}/>
-          <h2 style={{ fontSize:20, fontWeight:800, color:"#1a0505", marginBottom:4 }}>Let's get to know you</h2>
+          <h2 style={{ fontSize:20, fontWeight:800, color:"#0f172a", marginBottom:4 }}>Let's get to know you</h2>
           <p style={{ fontSize:12, color:"#9ca3af", marginBottom:22 }}>Your information is stored locally and never shared.</p>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:0 }}>
             <div style={{ paddingRight:12 }}>
@@ -865,15 +980,15 @@ function OnboardingWizard({ onComplete }) {
             </div>
           </div>
           {/* ── Password section ── */}
-          <div style={{marginTop:16,padding:"14px 16px",background:"#fff5f5",borderRadius:12,border:"1px solid #fecaca"}}>
-            <div style={{fontSize:11,fontWeight:800,color:"#dc2626",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
+          <div style={{marginTop:16,padding:"14px 16px",background:"#eff6ff",borderRadius:12,border:"1px solid #bfdbfe"}}>
+            <div style={{fontSize:11,fontWeight:800,color:"#1d4ed8",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
               🔒 Set a Password
               <span style={{fontSize:9,fontWeight:500,color:"#9ca3af"}}>Used to protect your data and confirm resets</span>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               <div style={{position:"relative"}}>
                 <label style={{display:"block",fontSize:11,fontWeight:700,color:"#374151",marginBottom:5}}>
-                  Password <span style={{color:"#dc2626"}}>*</span>
+                  Password <span style={{color:"#1d4ed8"}}>*</span>
                   <span style={{fontSize:9,color:"#9ca3af",fontWeight:400}}> (min. 6 characters)</span>
                 </label>
                 <div style={{position:"relative"}}>
@@ -889,7 +1004,7 @@ function OnboardingWizard({ onComplete }) {
               </div>
               <div>
                 <label style={{display:"block",fontSize:11,fontWeight:700,color:"#374151",marginBottom:5}}>
-                  Confirm Password <span style={{color:"#dc2626"}}>*</span>
+                  Confirm Password <span style={{color:"#1d4ed8"}}>*</span>
                 </label>
                 <input type={showPw?"text":"password"} value={pPasswordC} onChange={e=>setPPasswordC(e.target.value)}
                   placeholder="Repeat password"
@@ -906,7 +1021,7 @@ function OnboardingWizard({ onComplete }) {
               Continue →
             </button>
           </div>
-          {!isStep1Valid() && <div style={{marginTop:8,fontSize:10,color:"#f87171",textAlign:"center"}}>
+          {!isStep1Valid() && <div style={{marginTop:8,fontSize:10,color:"#93c5fd",textAlign:"center"}}>
             {!pName.trim()||!pEmail.includes("@") ? "Please enter your name and a valid email to continue." :
              pPassword.length<6 ? "Password must be at least 6 characters." :
              pPassword!==pPasswordC ? "Passwords do not match." : ""}
@@ -918,7 +1033,7 @@ function OnboardingWizard({ onComplete }) {
       {step === 2 && (
         <div style={cardStyle}>
           <OB_ProgressBar step={2}/>
-          <h2 style={{ fontSize:20, fontWeight:800, color:"#1a0505", marginBottom:4 }}>Your Financial Profile</h2>
+          <h2 style={{ fontSize:20, fontWeight:800, color:"#0f172a", marginBottom:4 }}>Your Financial Profile</h2>
           <p style={{ fontSize:12, color:"#9ca3af", marginBottom:22 }}>This powers your Wellness Score and scenario simulations.</p>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:0 }}>
             <div style={{ paddingRight:12 }}>
@@ -929,10 +1044,10 @@ function OnboardingWizard({ onComplete }) {
             <div style={{ paddingLeft:12, borderLeft:"1px solid #f3f4f6" }}>
               <div style={{ marginBottom:14 }}>
                 <label style={{ display:"block", fontSize:11, fontWeight:700, color:"#374151", marginBottom:5 }}>
-                  Household Size: <strong style={{color:"#dc2626"}}>{pHousehold} {parseInt(pHousehold)===1?"person":"people"}</strong>
+                  Household Size: <strong style={{color:"#1d4ed8"}}>{pHousehold} {parseInt(pHousehold)===1?"person":"people"}</strong>
                 </label>
                 <input type="range" min="1" max="8" value={pHousehold} onChange={e=>setPHousehold(e.target.value)}
-                  style={{ width:"100%", accentColor:"#dc2626" }}/>
+                  style={{ width:"100%", accentColor:"#1d4ed8" }}/>
                 <div style={{ display:"flex", justifyContent:"space-between", fontSize:9, color:"#9ca3af", marginTop:2 }}>
                   <span>1</span><span>8</span>
                 </div>
@@ -943,8 +1058,8 @@ function OnboardingWizard({ onComplete }) {
                 <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
                   {GOALS_OPTS.map(g=>(
                     <button key={g} onClick={()=>setPGoals(gs=>gs.includes(g)?gs.filter(x=>x!==g):[...gs,g])}
-                      style={{ padding:"4px 10px", borderRadius:99, border:`1px solid ${pGoals.includes(g)?"#dc2626":"#e5e7eb"}`,
-                        background:pGoals.includes(g)?"#fef2f2":"white", color:pGoals.includes(g)?"#dc2626":"#6b7280",
+                      style={{ padding:"4px 10px", borderRadius:99, border:`1px solid ${pGoals.includes(g)?"#1d4ed8":"#e5e7eb"}`,
+                        background:pGoals.includes(g)?"#eff6ff":"white", color:pGoals.includes(g)?"#1d4ed8":"#6b7280",
                         fontSize:10, fontWeight:600, cursor:"pointer", fontFamily:"'Sora',sans-serif" }}>
                       {g}
                     </button>
@@ -960,7 +1075,7 @@ function OnboardingWizard({ onComplete }) {
               Continue →
             </button>
           </div>
-          {!isStep2Valid() && <div style={{marginTop:8,fontSize:10,color:"#f87171",textAlign:"center"}}>Please enter your monthly salary to continue.</div>}
+          {!isStep2Valid() && <div style={{marginTop:8,fontSize:10,color:"#93c5fd",textAlign:"center"}}>Please enter your monthly salary to continue.</div>}
         </div>
       )}
 
@@ -968,22 +1083,22 @@ function OnboardingWizard({ onComplete }) {
       {step === 3 && (
         <div style={{ ...cardStyle, maxWidth:640 }}>
           <OB_ProgressBar step={3}/>
-          <h2 style={{ fontSize:20, fontWeight:800, color:"#1a0505", marginBottom:4 }}>What do you own?</h2>
+          <h2 style={{ fontSize:20, fontWeight:800, color:"#0f172a", marginBottom:4 }}>What do you own?</h2>
           <p style={{ fontSize:12, color:"#9ca3af", marginBottom:18 }}>Toggle any asset you own and enter its current value. You can add more later.</p>
           <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:16, maxHeight:340, overflowY:"auto", paddingRight:4 }}>
             {assetRows.map((row, idx) => (
               <div key={idx} style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 14px",
-                borderRadius:12, border:`1px solid ${row.enabled?"#fecaca":"#f3f4f6"}`,
-                background:row.enabled?"#fff5f5":"#fafafa", transition:"all 0.2s" }}>
+                borderRadius:12, border:`1px solid ${row.enabled?"#bfdbfe":"#f3f4f6"}`,
+                background:row.enabled?"#eff6ff":"#fafafa", transition:"all 0.2s" }}>
                 <button onClick={()=>setAssetRows(rows=>rows.map((r,i)=>i===idx?{...r,enabled:!r.enabled}:r))}
-                  style={{ width:22, height:22, borderRadius:6, border:`2px solid ${row.enabled?"#dc2626":"#d1d5db"}`,
-                    background:row.enabled?"#dc2626":"white", cursor:"pointer",
+                  style={{ width:22, height:22, borderRadius:6, border:`2px solid ${row.enabled?"#1d4ed8":"#d1d5db"}`,
+                    background:row.enabled?"#1d4ed8":"white", cursor:"pointer",
                     display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
                   {row.enabled && <span style={{color:"white",fontSize:12,fontWeight:800}}>✓</span>}
                 </button>
                 <span style={{ fontSize:18, flexShrink:0 }}>{row.icon}</span>
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:12, fontWeight:700, color:"#1a0505" }}>{row.name}</div>
+                  <div style={{ fontSize:12, fontWeight:700, color:"#0f172a" }}>{row.name}</div>
                   <div style={{ fontSize:10, color:"#9ca3af" }}>{row.category}</div>
                 </div>
                 {row.enabled && (
@@ -991,38 +1106,38 @@ function OnboardingWizard({ onComplete }) {
                     <span style={{ fontSize:11, fontWeight:700, color:"#6b7280", flexShrink:0 }}>S$</span>
                     <input type="number" value={row.value} onChange={e=>setAssetRows(rows=>rows.map((r,i)=>i===idx?{...r,value:e.target.value}:r))}
                       placeholder={row.placeholder}
-                      style={{ width:110, padding:"6px 10px", borderRadius:8, border:"1px solid #fecaca",
+                      style={{ width:110, padding:"6px 10px", borderRadius:8, border:"1px solid #bfdbfe",
                         background:"white", fontSize:12, fontFamily:"'Sora',sans-serif", outline:"none",
-                        color:"#1a0505" }}/>
+                        color:"#0f172a" }}/>
                   </div>
                 )}
               </div>
             ))}
             {customAssets.map((a, idx) => (
               <div key={"ca"+idx} style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 14px",
-                borderRadius:12, border:"1px solid #fecaca", background:"#fff5f5" }}>
+                borderRadius:12, border:"1px solid #bfdbfe", background:"#eff6ff" }}>
                 <span style={{ fontSize:16 }}>{ASSET_ICONS[a.category]||"💼"}</span>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontSize:12, fontWeight:700, color:"#1a0505" }}>{a.name}</div>
+                  <div style={{ fontSize:12, fontWeight:700, color:"#0f172a" }}>{a.name}</div>
                   <div style={{ fontSize:10, color:"#9ca3af" }}>{a.category}</div>
                 </div>
-                <span style={{ fontSize:12, fontWeight:700, color:"#dc2626" }}>S${parseFloat(a.value||0).toLocaleString()}</span>
+                <span style={{ fontSize:12, fontWeight:700, color:"#1d4ed8" }}>S${parseFloat(a.value||0).toLocaleString()}</span>
                 <button onClick={()=>setCustomAssets(ca=>ca.filter((_,i)=>i!==idx))}
-                  style={{ background:"#fee2e2", border:"none", borderRadius:6, width:22, height:22, color:"#dc2626", cursor:"pointer", fontSize:12, fontWeight:800 }}>✕</button>
+                  style={{ background:"#dbeafe", border:"none", borderRadius:6, width:22, height:22, color:"#1d4ed8", cursor:"pointer", fontSize:12, fontWeight:800 }}>✕</button>
               </div>
             ))}
           </div>
           {addingCustomA ? (
-            <div style={{ padding:"14px", borderRadius:12, border:"1px dashed #fca5a5", background:"#fff5f5", marginBottom:12 }}>
+            <div style={{ padding:"14px", borderRadius:12, border:"1px dashed #93c5fd", background:"#eff6ff", marginBottom:12 }}>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:8 }}>
                 <input placeholder="Asset name" value={newCustA.name} onChange={e=>setNewCustA(a=>({...a,name:e.target.value}))}
-                  style={{padding:"8px 10px",borderRadius:8,border:"1px solid #fecaca",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none"}}/>
+                  style={{padding:"8px 10px",borderRadius:8,border:"1px solid #bfdbfe",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none"}}/>
                 <select value={newCustA.category} onChange={e=>setNewCustA(a=>({...a,category:e.target.value}))}
-                  style={{padding:"8px 10px",borderRadius:8,border:"1px solid #fecaca",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none",background:"white"}}>
+                  style={{padding:"8px 10px",borderRadius:8,border:"1px solid #bfdbfe",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none",background:"white"}}>
                   {ASSET_CATS.map(c=><option key={c}>{c}</option>)}
                 </select>
                 <input type="number" placeholder="Value (SGD)" value={newCustA.value} onChange={e=>setNewCustA(a=>({...a,value:e.target.value}))}
-                  style={{padding:"8px 10px",borderRadius:8,border:"1px solid #fecaca",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none"}}/>
+                  style={{padding:"8px 10px",borderRadius:8,border:"1px solid #bfdbfe",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none"}}/>
               </div>
               <div style={{ display:"flex", gap:8 }}>
                 <button onClick={()=>setAddingCustomA(false)} style={{ ...btnSecondary, padding:"7px 14px", fontSize:11 }}>Cancel</button>
@@ -1032,8 +1147,8 @@ function OnboardingWizard({ onComplete }) {
             </div>
           ) : (
             <button onClick={()=>setAddingCustomA(true)}
-              style={{ width:"100%", padding:"9px", borderRadius:10, border:"1px dashed #fca5a5",
-                background:"transparent", color:"#dc2626", fontSize:12, fontWeight:600, cursor:"pointer",
+              style={{ width:"100%", padding:"9px", borderRadius:10, border:"1px dashed #93c5fd",
+                background:"transparent", color:"#1d4ed8", fontSize:12, fontWeight:600, cursor:"pointer",
                 fontFamily:"'Sora',sans-serif", marginBottom:12 }}>+ Add Custom Asset</button>
           )}
           <div style={{ display:"flex", gap:10 }}>
@@ -1048,22 +1163,22 @@ function OnboardingWizard({ onComplete }) {
       {step === 4 && (
         <div style={{ ...cardStyle, maxWidth:640 }}>
           <OB_ProgressBar step={4}/>
-          <h2 style={{ fontSize:20, fontWeight:800, color:"#1a0505", marginBottom:4 }}>What do you owe?</h2>
+          <h2 style={{ fontSize:20, fontWeight:800, color:"#0f172a", marginBottom:4 }}>What do you owe?</h2>
           <p style={{ fontSize:12, color:"#9ca3af", marginBottom:18 }}>Adding liabilities gives you an accurate Net Worth and Debt Score.</p>
           <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:16 }}>
             {liabRows.map((row, idx) => (
               <div key={idx} style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 14px",
-                borderRadius:12, border:`1px solid ${row.enabled?"#fecaca":"#f3f4f6"}`,
-                background:row.enabled?"#fff5f5":"#fafafa", transition:"all 0.2s" }}>
+                borderRadius:12, border:`1px solid ${row.enabled?"#bfdbfe":"#f3f4f6"}`,
+                background:row.enabled?"#eff6ff":"#fafafa", transition:"all 0.2s" }}>
                 <button onClick={()=>setLiabRows(rows=>rows.map((r,i)=>i===idx?{...r,enabled:!r.enabled}:r))}
-                  style={{ width:22, height:22, borderRadius:6, border:`2px solid ${row.enabled?"#dc2626":"#d1d5db"}`,
-                    background:row.enabled?"#dc2626":"white", cursor:"pointer",
+                  style={{ width:22, height:22, borderRadius:6, border:`2px solid ${row.enabled?"#1d4ed8":"#d1d5db"}`,
+                    background:row.enabled?"#1d4ed8":"white", cursor:"pointer",
                     display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
                   {row.enabled && <span style={{color:"white",fontSize:12,fontWeight:800}}>✓</span>}
                 </button>
                 <span style={{ fontSize:18, flexShrink:0 }}>{row.icon}</span>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontSize:12, fontWeight:700, color:"#1a0505" }}>{row.name}</div>
+                  <div style={{ fontSize:12, fontWeight:700, color:"#0f172a" }}>{row.name}</div>
                   <div style={{ fontSize:10, color:"#9ca3af" }}>{row.category}</div>
                 </div>
                 {row.enabled && (
@@ -1072,13 +1187,13 @@ function OnboardingWizard({ onComplete }) {
                       <div style={{ fontSize:9, color:"#9ca3af", marginBottom:2 }}>Total (S$)</div>
                       <input type="number" value={row.value} onChange={e=>setLiabRows(rows=>rows.map((r,i)=>i===idx?{...r,value:e.target.value}:r))}
                         placeholder={row.placeholder}
-                        style={{ width:95, padding:"6px 8px", borderRadius:8, border:"1px solid #fecaca", background:"white", fontSize:11, fontFamily:"'Sora',sans-serif", outline:"none" }}/>
+                        style={{ width:95, padding:"6px 8px", borderRadius:8, border:"1px solid #bfdbfe", background:"white", fontSize:11, fontFamily:"'Sora',sans-serif", outline:"none" }}/>
                     </div>
                     <div>
                       <div style={{ fontSize:9, color:"#9ca3af", marginBottom:2 }}>Monthly (S$)</div>
                       <input type="number" value={row.monthly} onChange={e=>setLiabRows(rows=>rows.map((r,i)=>i===idx?{...r,monthly:e.target.value}:r))}
                         placeholder={row.mpHolder}
-                        style={{ width:85, padding:"6px 8px", borderRadius:8, border:"1px solid #fecaca", background:"white", fontSize:11, fontFamily:"'Sora',sans-serif", outline:"none" }}/>
+                        style={{ width:85, padding:"6px 8px", borderRadius:8, border:"1px solid #bfdbfe", background:"white", fontSize:11, fontFamily:"'Sora',sans-serif", outline:"none" }}/>
                     </div>
                   </div>
                 )}
@@ -1086,31 +1201,31 @@ function OnboardingWizard({ onComplete }) {
             ))}
             {customLiabs.map((l, idx) => (
               <div key={"cl"+idx} style={{ display:"flex", alignItems:"center", gap:10, padding:"11px 14px",
-                borderRadius:12, border:"1px solid #fecaca", background:"#fff5f5" }}>
+                borderRadius:12, border:"1px solid #bfdbfe", background:"#eff6ff" }}>
                 <span style={{ fontSize:16 }}>💳</span>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontSize:12, fontWeight:700, color:"#1a0505" }}>{l.name}</div>
+                  <div style={{ fontSize:12, fontWeight:700, color:"#0f172a" }}>{l.name}</div>
                   <div style={{ fontSize:10, color:"#9ca3af" }}>{l.category}</div>
                 </div>
                 <span style={{ fontSize:12, fontWeight:700, color:"#ef4444" }}>S${parseFloat(l.value||0).toLocaleString()}</span>
                 <button onClick={()=>setCustomLiabs(cl=>cl.filter((_,i)=>i!==idx))}
-                  style={{ background:"#fee2e2", border:"none", borderRadius:6, width:22, height:22, color:"#dc2626", cursor:"pointer", fontSize:12, fontWeight:800 }}>✕</button>
+                  style={{ background:"#dbeafe", border:"none", borderRadius:6, width:22, height:22, color:"#1d4ed8", cursor:"pointer", fontSize:12, fontWeight:800 }}>✕</button>
               </div>
             ))}
           </div>
           {addingCustomL ? (
-            <div style={{ padding:"14px", borderRadius:12, border:"1px dashed #fca5a5", background:"#fff5f5", marginBottom:12 }}>
+            <div style={{ padding:"14px", borderRadius:12, border:"1px dashed #93c5fd", background:"#eff6ff", marginBottom:12 }}>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8, marginBottom:8 }}>
                 <input placeholder="Name" value={newCustL.name} onChange={e=>setNewCustL(l=>({...l,name:e.target.value}))}
-                  style={{padding:"8px 10px",borderRadius:8,border:"1px solid #fecaca",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none"}}/>
+                  style={{padding:"8px 10px",borderRadius:8,border:"1px solid #bfdbfe",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none"}}/>
                 <select value={newCustL.category} onChange={e=>setNewCustL(l=>({...l,category:e.target.value}))}
-                  style={{padding:"8px 10px",borderRadius:8,border:"1px solid #fecaca",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none",background:"white"}}>
+                  style={{padding:"8px 10px",borderRadius:8,border:"1px solid #bfdbfe",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none",background:"white"}}>
                   {LIAB_CATS.map(c=><option key={c}>{c}</option>)}
                 </select>
                 <input type="number" placeholder="Total (S$)" value={newCustL.value} onChange={e=>setNewCustL(l=>({...l,value:e.target.value}))}
-                  style={{padding:"8px 10px",borderRadius:8,border:"1px solid #fecaca",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none"}}/>
+                  style={{padding:"8px 10px",borderRadius:8,border:"1px solid #bfdbfe",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none"}}/>
                 <input type="number" placeholder="Monthly (S$)" value={newCustL.monthly} onChange={e=>setNewCustL(l=>({...l,monthly:e.target.value}))}
-                  style={{padding:"8px 10px",borderRadius:8,border:"1px solid #fecaca",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none"}}/>
+                  style={{padding:"8px 10px",borderRadius:8,border:"1px solid #bfdbfe",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none"}}/>
               </div>
               <div style={{ display:"flex", gap:8 }}>
                 <button onClick={()=>setAddingCustomL(false)} style={{ ...btnSecondary, padding:"7px 14px", fontSize:11 }}>Cancel</button>
@@ -1120,8 +1235,8 @@ function OnboardingWizard({ onComplete }) {
             </div>
           ) : (
             <button onClick={()=>setAddingCustomL(true)}
-              style={{ width:"100%", padding:"9px", borderRadius:10, border:"1px dashed #fca5a5",
-                background:"transparent", color:"#dc2626", fontSize:12, fontWeight:600, cursor:"pointer",
+              style={{ width:"100%", padding:"9px", borderRadius:10, border:"1px dashed #93c5fd",
+                background:"transparent", color:"#1d4ed8", fontSize:12, fontWeight:600, cursor:"pointer",
                 fontFamily:"'Sora',sans-serif", marginBottom:12 }}>+ Add Custom Liability</button>
           )}
           <div style={{ display:"flex", gap:10 }}>
@@ -1136,12 +1251,12 @@ function OnboardingWizard({ onComplete }) {
       {step === 5 && (
         <div style={cardStyle}>
           <OB_ProgressBar step={5}/>
-          <h2 style={{ fontSize:20, fontWeight:800, color:"#1a0505", marginBottom:4 }}>Connect your accounts</h2>
+          <h2 style={{ fontSize:20, fontWeight:800, color:"#0f172a", marginBottom:4 }}>Connect your accounts</h2>
           <p style={{ fontSize:12, color:"#9ca3af", marginBottom:6 }}>Securely link accounts for automatic updates. All connections are <strong>read-only</strong> — we can never execute trades or move funds.</p>
           <div style={{ display:"flex", gap:8, marginBottom:18 }}>
             {["🔒 256-bit encrypted","👁️ Read-only access","🚫 No trading","🗑️ Delete anytime"].map((t,i)=>(
-              <div key={i} style={{ padding:"4px 8px", borderRadius:8, background:"#fff5f5",
-                border:"1px solid #fecaca", fontSize:9, fontWeight:700, color:"#dc2626" }}>{t}</div>
+              <div key={i} style={{ padding:"4px 8px", borderRadius:8, background:"#eff6ff",
+                border:"1px solid #bfdbfe", fontSize:9, fontWeight:700, color:"#1d4ed8" }}>{t}</div>
             ))}
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:20 }}>
@@ -1152,7 +1267,7 @@ function OnboardingWizard({ onComplete }) {
                 <div style={{ width:40, height:40, borderRadius:12, background:`${p.color}14`,
                   display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>{p.icon}</div>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:"#1a0505" }}>{p.name}</div>
+                  <div style={{ fontSize:13, fontWeight:700, color:"#0f172a" }}>{p.name}</div>
                   <div style={{ fontSize:10, color:"#9ca3af" }}>{p.desc}</div>
                 </div>
                 {connected[p.id] ? (
@@ -1186,34 +1301,34 @@ function OnboardingWizard({ onComplete }) {
         const totalA = fa.reduce((s,a)=>s+a.value,0), totalL = fl.reduce((s,l)=>s+l.value,0);
         return (
           <div style={{ ...cardStyle, textAlign:"center" }}>
-            <div style={{ fontSize:11, fontWeight:700, color:"#dc2626", letterSpacing:1, textTransform:"uppercase", marginBottom:12 }}>Setup Complete!</div>
-            <h2 style={{ fontSize:22, fontWeight:800, color:"#1a0505", marginBottom:4 }}>Welcome to WealthWell, {firstName}!</h2>
+            <div style={{ fontSize:11, fontWeight:700, color:"#1d4ed8", letterSpacing:1, textTransform:"uppercase", marginBottom:12 }}>Setup Complete!</div>
+            <h2 style={{ fontSize:22, fontWeight:800, color:"#0f172a", marginBottom:4 }}>Welcome to Finora, {firstName}!</h2>
             <p style={{ fontSize:12, color:"#9ca3af", marginBottom:24 }}>Here's your initial Wealth Wellness snapshot.</p>
             <div style={{ display:"flex", justifyContent:"center", marginBottom:20 }}>
               <Ring score={scores.overall} size={130} dark={false}/>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:24 }}>
               {[
-                { l:"Net Worth",    v: `S$${(totalA-totalL).toLocaleString()}`, c:"#1a0505" },
+                { l:"Net Worth",    v: `S$${(totalA-totalL).toLocaleString()}`, c:"#0f172a" },
                 { l:"Total Assets", v: `S$${totalA.toLocaleString()}`,          c:"#10b981" },
                 { l:"Total Debts",  v: `-S$${totalL.toLocaleString()}`,          c:"#ef4444" },
               ].map((s,i)=>(
-                <div key={i} style={{ padding:"14px 12px", borderRadius:14, background:"#fff5f5", border:"1px solid #fecaca" }}>
+                <div key={i} style={{ padding:"14px 12px", borderRadius:14, background:"#eff6ff", border:"1px solid #bfdbfe" }}>
                   <div style={{ fontSize:10, color:"#9ca3af", marginBottom:4 }}>{s.l}</div>
                   <div style={{ fontSize:16, fontWeight:800, color:s.c }}>{s.v}</div>
                 </div>
               ))}
             </div>
             {scores.liquidity < 60 && (
-              <div style={{ padding:"10px 14px", borderRadius:10, background:"#fff1f0",
-                border:"1px solid #fca5a5", marginBottom:16, fontSize:11, color:"#b91c1c", textAlign:"left" }}>
+              <div style={{ padding:"10px 14px", borderRadius:10, background:"#eff6ff",
+                border:"1px solid #fca5a5", marginBottom:16, fontSize:11, color:"#1e40af", textAlign:"left" }}>
                 ⚠️ <strong>Priority action:</strong> Your emergency fund covers only {scores.liqMonths} months of expenses. The app will guide you to fix this first.
               </div>
             )}
             <button onClick={handleFinish}
               style={{ ...btnPrimary, width:"100%", padding:"14px", fontSize:14,
-                boxShadow:"0 6px 20px rgba(220,38,38,0.35)" }}>
-              Enter WealthWell →
+                boxShadow:"0 6px 20px rgba(29,78,216,0.35)" }}>
+              Enter Finora →
             </button>
             <div style={{ marginTop:12, fontSize:10, color:"#9ca3af" }}>Your data is saved locally. You can edit everything inside the app.</div>
           </div>
@@ -1502,8 +1617,10 @@ const NAV = [
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
   // ── Onboarding gate ──
-  const [onboarded, setOnboarded] = useState(false);
-  const [loading,   setLoading]   = useState(true);
+  const [onboarded,  setOnboarded]  = useState(false);
+  const [loading,    setLoading]    = useState(true);
+  const [loggedIn,   setLoggedIn]   = useState(false);   // true after passing login screen
+  const [creatingNew,setCreatingNew]= useState(false);   // force onboarding flow
 
   // ── Core state ──
   const [profile,  setProfile]  = useState(null);
@@ -1540,6 +1657,9 @@ export default function App() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetPwInput,    setResetPwInput]    = useState("");
   const [resetPwError,    setResetPwError]    = useState("");
+  const [trustDeleteOpen,  setTrustDeleteOpen]  = useState(false);
+  const [trustDeletePw,    setTrustDeletePw]    = useState("");
+  const [trustDeleteError, setTrustDeleteError] = useState("");
 
   // ── Load from localStorage on mount ──
   useEffect(() => {
@@ -1557,6 +1677,7 @@ export default function App() {
           setDone(d.done           || []);
           setParams(d.params       || params);
           setOnboarded(true);
+          // ← do NOT set loggedIn=true here; user must pass the login screen
         }
       }
     } catch(e) { /* silent fail */ }
@@ -1580,6 +1701,8 @@ export default function App() {
     setLiabs(data.liabs     || []);
     setConnected(data.connected || {});
     setOnboarded(true);
+    setLoggedIn(true);
+    setCreatingNew(false);
     setEditP(data.profile);
   }, []);
 
@@ -1695,19 +1818,35 @@ export default function App() {
     </div>
   );
 
-  // ── Loading / Onboarding gate ──
+  // ── Loading / Auth gate ──
   if (loading) return (
-    <div style={{minHeight:"100vh",background:"#fff5f5",display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style={{minHeight:"100vh",background:"#eff6ff",display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{fontSize:32,animation:"pulse 1.2s infinite"}}>⬡</div>
     </div>
   );
+  // Force onboarding: user clicked "Create Account" from login screen
+  if (creatingNew) return <OnboardingWizard onComplete={handleOnboardingComplete}/>;
+  // Existing account found but not yet logged in → show login
+  if (onboarded && !loggedIn) return (
+    <LoginScreen
+      profile={profile}
+      onLogin={()=>setLoggedIn(true)}
+      onCreateAccount={()=>{
+        localStorage.removeItem(STORAGE_KEY);
+        setOnboarded(false);
+        setProfile(null);
+        setCreatingNew(true);
+      }}
+    />
+  );
+  // No account yet → onboarding
   if (!onboarded) return <OnboardingWizard onComplete={handleOnboardingComplete}/>;
   if (!profile)   return <OnboardingWizard onComplete={handleOnboardingComplete}/>;
 
   const firstName = (profile.name||"").split(" ")[0] || "User";
 
   return (
-    <div style={{fontFamily:"'Sora','Segoe UI',sans-serif",minHeight:"100vh",width:"100%",background:bg,position:"relative"}}>
+    <div style={{fontFamily:"'Sora','Segoe UI',sans-serif",minHeight:"100vh",width:"100%",background:screen==="home"?"linear-gradient(180deg,#bfdbfe 0%,#dbeafe 18%,#eff6ff 42%,#ffffff 72%)":bg,position:"relative"}}>
       <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0;}
@@ -1719,6 +1858,12 @@ export default function App() {
         .hov:hover{transform:translateY(-2px)!important;box-shadow:0 8px 26px rgba(0,0,0,0.09)!important;transition:all 0.2s!important;}
         .nb:hover{background:rgba(255,255,255,0.14)!important;}
         input:focus,select:focus{border-color:#6366f1!important;outline:none!important;}
+        /* ── Scenario Lab sliders ─────────────────────────────────────── */
+        .sc-slider{-webkit-appearance:none;appearance:none;height:6px;border-radius:99px;background:linear-gradient(90deg,#1d4ed8,#6366f1);outline:none;cursor:pointer;transition:box-shadow 0.2s;}
+        .sc-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:20px;height:20px;border-radius:50%;background:white;border:3px solid #1d4ed8;box-shadow:0 2px 8px rgba(29,78,216,0.35);cursor:pointer;transition:border-color 0.2s,transform 0.15s;}
+        .sc-slider::-webkit-slider-thumb:hover{transform:scale(1.18);border-color:#6366f1;}
+        .sc-slider::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:white;border:3px solid #1d4ed8;box-shadow:0 2px 8px rgba(29,78,216,0.35);cursor:pointer;}
+        .sc-slider:hover{box-shadow:0 0 0 3px rgba(99,102,241,0.18);}
       `}</style>
 
       <div style={{position:"fixed",top:0,left:220,right:0,height:195,background:topBand,zIndex:0,pointerEvents:"none",transition:"background 0.4s"}}/>
@@ -1729,7 +1874,7 @@ export default function App() {
           <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:15}}>
             <div style={{width:32,height:32,background:"rgba(255,255,255,0.16)",borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}}>⬡</div>
             <div>
-              <div style={{fontSize:13,fontWeight:800,color:"white"}}>WealthWell</div>
+              <div style={{fontSize:13,fontWeight:800,color:"white"}}>Finora</div>
               <div style={{fontSize:9,color:"rgba(255,255,255,0.45)"}}>Financial Hub · SG</div>
             </div>
           </div>
@@ -1779,52 +1924,15 @@ export default function App() {
             </button>
           </div>
 
-          {/* New Profile / Reset button */}
-          {!showResetConfirm ? (
-            <button
-              onClick={()=>{setShowResetConfirm(true);setResetPwInput("");setResetPwError("");}}
-              style={{width:"100%",padding:"7px 11px",borderRadius:9,border:"1px solid rgba(255,255,255,0.18)",background:"rgba(255,255,255,0.07)",color:"rgba(255,255,255,0.6)",fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"'Sora',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all 0.2s"}}
-              onMouseEnter={e=>{e.currentTarget.style.background="rgba(220,38,38,0.25)";e.currentTarget.style.borderColor="rgba(220,38,38,0.5)";e.currentTarget.style.color="white";}}
-              onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.07)";e.currentTarget.style.borderColor="rgba(255,255,255,0.18)";e.currentTarget.style.color="rgba(255,255,255,0.6)";}}
-            >
-              <span style={{fontSize:12}}>↩</span> New Profile / Reset
-            </button>
-          ) : (
-            <div style={{background:"rgba(220,38,38,0.18)",border:"1px solid rgba(220,38,38,0.45)",borderRadius:10,padding:"10px 11px"}}>
-              <div style={{fontSize:10,fontWeight:700,color:"#fca5a5",marginBottom:6,lineHeight:1.4}}>
-                🔒 Enter your password to confirm reset
-              </div>
-              <div style={{fontSize:9,color:"rgba(255,200,200,0.7)",marginBottom:8,lineHeight:1.4}}>
-                ⚠️ This will permanently clear all your data.
-              </div>
-              <div style={{position:"relative",marginBottom:6}}>
-                <input
-                  type="password"
-                  value={resetPwInput}
-                  onChange={e=>{setResetPwInput(e.target.value);setResetPwError("");}}
-                  placeholder="Your password"
-                  style={{width:"100%",padding:"7px 10px",borderRadius:7,border:`1px solid ${resetPwError?"#f87171":"rgba(255,255,255,0.2)"}`,background:"rgba(0,0,0,0.3)",color:"white",fontSize:11,fontFamily:"'Sora',sans-serif",outline:"none"}}
-                />
-                {resetPwError&&<div style={{fontSize:9,color:"#f87171",marginTop:3}}>{resetPwError}</div>}
-              </div>
-              <div style={{display:"flex",gap:6}}>
-                <button
-                  onClick={()=>{setShowResetConfirm(false);setResetPwInput("");setResetPwError("");}}
-                  style={{flex:1,padding:"6px 0",borderRadius:7,border:"1px solid rgba(255,255,255,0.2)",background:"transparent",color:"rgba(255,255,255,0.7)",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}
-                >Cancel</button>
-                <button
-                  onClick={()=>{
-                    const stored = profile?.passwordHash;
-                    const entered = btoa(unescape(encodeURIComponent(resetPwInput)));
-                    if(!stored){ localStorage.removeItem(STORAGE_KEY); window.location.reload(); return; }
-                    if(entered===stored){ localStorage.removeItem(STORAGE_KEY); window.location.reload(); }
-                    else { setResetPwError("Incorrect password. Try again."); }
-                  }}
-                  style={{flex:2,padding:"6px 0",borderRadius:7,border:"none",background:"#dc2626",color:"white",fontSize:10,fontWeight:800,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}
-                >Confirm Reset</button>
-              </div>
-            </div>
-          )}
+          {/* Sign Out */}
+          <button
+            onClick={()=>setLoggedIn(false)}
+            style={{width:"100%",padding:"7px 11px",borderRadius:9,border:"1px solid rgba(255,255,255,0.18)",background:"rgba(255,255,255,0.07)",color:"rgba(255,255,255,0.6)",fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"'Sora',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all 0.2s"}}
+            onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.15)";e.currentTarget.style.color="white";}}
+            onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.07)";e.currentTarget.style.color="rgba(255,255,255,0.6)";}}
+          >
+            <span style={{fontSize:12}}>→</span> Sign Out
+          </button>
         </div>
       </div>
 
@@ -2058,7 +2166,7 @@ export default function App() {
                               <div style={{background:"linear-gradient(135deg,#dc2626,#9f1239)",borderRadius:5,padding:"2px 9px",fontSize:9,fontWeight:800,color:"white",letterSpacing:1}}>⬡ PRO</div>
                               <span style={{fontSize:10,fontWeight:700,color:"#64748b",letterSpacing:1,textTransform:"uppercase"}}>Statement of Financial Position</span>
                             </div>
-                            <div style={{fontSize:20,fontWeight:800,color:"#0f172a"}}>{profile.name||"WealthWell User"}</div>
+                            <div style={{fontSize:20,fontWeight:800,color:"#0f172a"}}>{profile.name||"Finora User"}</div>
                             <div style={{fontSize:10,color:"#64748b",marginTop:2}}>As at {bsDate} · All figures in {cur.code}</div>
                           </div>
                           <div style={{textAlign:"right"}}>
@@ -2137,7 +2245,7 @@ export default function App() {
 
                         {/* Footer note */}
                         <div style={{marginTop:14,paddingTop:10,borderTop:"1px solid #e2e8f0",fontSize:9,color:"#94a3b8",display:"flex",justifyContent:"space-between"}}>
-                          <span>Generated by WealthWell Pro · {bsDate}</span>
+                          <span>Generated by Finora Pro · {bsDate}</span>
                           <span>All figures are self-reported estimates · Not a substitute for professional financial advice</span>
                         </div>
                       </div>
@@ -2235,27 +2343,27 @@ export default function App() {
                     {scenario==="crash"&&[{l:"Equity drop",k:"equityDrop",min:5,max:60,step:5,u:"%"},{l:"Crypto drop",k:"cryptoDrop",min:10,max:90,step:10,u:"%"}].map(sl=>(
                       <div key={sl.k} style={{marginBottom:12}}>
                         <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:10,fontWeight:700,color:sub}}>{sl.l}</span><strong style={{fontSize:11,color:sd.color}}>{params.crash[sl.k]}{sl.u}</strong></div>
-                        <input type="range" min={sl.min} max={sl.max} step={sl.step} value={params.crash[sl.k]} onChange={e=>setParams(p=>({...p,crash:{...p.crash,[sl.k]:+e.target.value}}))} style={{width:"100%",accentColor:sd.color}}/>
+                        <input type="range" min={sl.min} max={sl.max} step={sl.step} value={params.crash[sl.k]} onChange={e=>setParams(p=>({...p,crash:{...p.crash,[sl.k]:+e.target.value}}))} className="sc-slider" style={{width:"100%"}}/>
                       </div>
                     ))}
                     {scenario==="jobloss"&&<div>
                       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:10,fontWeight:700,color:sub}}>Months without income</span><strong style={{fontSize:11,color:sd.color}}>{params.jobloss.months} mo.</strong></div>
-                      <input type="range" min={1} max={24} value={params.jobloss.months} onChange={e=>setParams(p=>({...p,jobloss:{months:+e.target.value}}))} style={{width:"100%",accentColor:sd.color}}/>
+                      <input type="range" min={1} max={24} value={params.jobloss.months} onChange={e=>setParams(p=>({...p,jobloss:{months:+e.target.value}}))} className="sc-slider" style={{width:"100%"}}/>
                       <div style={{marginTop:9,background:`${sd.color}12`,borderRadius:7,padding:"7px 9px",fontSize:10,fontWeight:700,color:sd.color}}>Monthly salary: <strong>{fc(profile.salary||0,cur)}</strong></div>
                     </div>}
                     {scenario==="rates"&&<div>
                       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:10,fontWeight:700,color:sub}}>Rate increase</span><strong style={{fontSize:11,color:sd.color}}>{params.rates.hikePct}%</strong></div>
-                      <input type="range" min={0.25} max={5} step={0.25} value={params.rates.hikePct} onChange={e=>setParams(p=>({...p,rates:{hikePct:+e.target.value}}))} style={{width:"100%",accentColor:sd.color}}/>
+                      <input type="range" min={0.25} max={5} step={0.25} value={params.rates.hikePct} onChange={e=>setParams(p=>({...p,rates:{hikePct:+e.target.value}}))} className="sc-slider" style={{width:"100%"}}/>
                     </div>}
                     {scenario==="retirement"&&[{l:"Years to retirement",k:"years",min:5,max:40,fmt:v=>`${v} yrs`},{l:`Monthly savings (${cur.code})`,k:"monthly",min:100,max:5000,step:100,fmt:v=>fc(v,cur,true)}].map(sl=>(
                       <div key={sl.k} style={{marginBottom:12}}>
                         <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:10,fontWeight:700,color:sub}}>{sl.l}</span><strong style={{fontSize:11,color:sd.color}}>{sl.fmt(params.retirement[sl.k])}</strong></div>
-                        <input type="range" min={sl.min||5} max={sl.max} step={sl.step||1} value={params.retirement[sl.k]} onChange={e=>setParams(p=>({...p,retirement:{...p.retirement,[sl.k]:+e.target.value}}))} style={{width:"100%",accentColor:sd.color}}/>
+                        <input type="range" min={sl.min||5} max={sl.max} step={sl.step||1} value={params.retirement[sl.k]} onChange={e=>setParams(p=>({...p,retirement:{...p.retirement,[sl.k]:+e.target.value}}))} className="sc-slider" style={{width:"100%"}}/>
                       </div>
                     ))}
                     {scenario==="property"&&<div>
                       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:10,fontWeight:700,color:sub}}>Property price</span><strong style={{fontSize:11,color:sd.color}}>{fc(params.property.price,cur,true)}</strong></div>
-                      <input type="range" min={300000} max={3000000} step={50000} value={params.property.price} onChange={e=>setParams(p=>({...p,property:{price:+e.target.value}}))} style={{width:"100%",accentColor:sd.color}}/>
+                      <input type="range" min={300000} max={3000000} step={50000} value={params.property.price} onChange={e=>setParams(p=>({...p,property:{price:+e.target.value}}))} className="sc-slider" style={{width:"100%"}}/>
                     </div>}
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -2311,7 +2419,7 @@ export default function App() {
                       <div style={{padding:"10px 16px",background:"#1e293b",borderBottom:"1px solid #334155",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                         <div style={{display:"flex",alignItems:"center",gap:8}}>
                           <div style={{width:6,height:6,borderRadius:"50%",background:"#10b981",boxShadow:"0 0 6px #10b981"}}/>
-                          <span style={{fontSize:9,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:1.2}}>WealthWell Analysis Engine</span>
+                          <span style={{fontSize:9,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:1.2}}>Finora Analysis Engine</span>
                           <span style={{fontSize:8,color:"#475569",fontFamily:"'Courier New',monospace"}}>· LIVE</span>
                         </div>
                         <button onClick={()=>setScreen("actions")} style={{padding:"5px 13px",background:`linear-gradient(135deg,${sd.color},${sd.color}aa)`,color:"white",border:"none",borderRadius:3,fontSize:9,fontWeight:800,cursor:"pointer",fontFamily:"'Sora',sans-serif",letterSpacing:.8,textTransform:"uppercase"}}>
@@ -2502,13 +2610,38 @@ export default function App() {
               </div>
               <div className="hov" style={{background:"#fff1f0",borderRadius:14,padding:18,border:"1px solid #fecaca",transition:"all .3s"}}>
                 <div style={{fontSize:13,fontWeight:800,color:"#7f1d1d",marginBottom:9}}>⚠️ Data Control</div>
-                <div style={{display:"flex",gap:11,alignItems:"center"}}>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:11,fontWeight:700,color:"#1a0505",marginBottom:3}}>Reset & Clear All Data</div>
-                    <div style={{fontSize:10,color:"#7f1d1d"}}>Permanently delete your profile, assets, and settings. Returns you to onboarding. This cannot be undone.</div>
+                {!trustDeleteOpen ? (
+                  <div style={{display:"flex",gap:11,alignItems:"center"}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:11,fontWeight:700,color:"#1a0505",marginBottom:3}}>Delete Account & Clear All Data</div>
+                      <div style={{fontSize:10,color:"#7f1d1d"}}>Permanently delete your profile, assets, and all settings. This cannot be undone.</div>
+                    </div>
+                    <button onClick={()=>{setTrustDeleteOpen(true);setTrustDeletePw("");setTrustDeleteError("");}} style={{padding:"9px 20px",background:"#dc2626",color:"white",border:"none",borderRadius:10,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif",flexShrink:0}}>Delete Account</button>
                   </div>
-                  <button onClick={resetApp} style={{padding:"9px 20px",background:"#dc2626",color:"white",border:"none",borderRadius:10,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif",flexShrink:0}}>Reset App</button>
-                </div>
+                ) : (
+                  <div>
+                    <div style={{fontSize:11,fontWeight:700,color:"#1a0505",marginBottom:4}}>Confirm Account Deletion</div>
+                    <div style={{fontSize:10,color:"#7f1d1d",marginBottom:12,lineHeight:1.5}}>🔒 Enter your password to permanently delete all data. This action <strong>cannot be undone</strong>.</div>
+                    <input
+                      type="password"
+                      value={trustDeletePw}
+                      onChange={e=>{setTrustDeletePw(e.target.value);setTrustDeleteError("");}}
+                      placeholder="Enter your password"
+                      style={{width:"100%",padding:"9px 12px",borderRadius:9,border:`1px solid ${trustDeleteError?"#dc2626":"#fca5a5"}`,background:"white",color:"#1a0505",fontSize:12,fontFamily:"'Sora',sans-serif",outline:"none",marginBottom:6}}
+                    />
+                    {trustDeleteError&&<div style={{fontSize:10,color:"#dc2626",fontWeight:600,marginBottom:8}}>{trustDeleteError}</div>}
+                    <div style={{display:"flex",gap:8,marginTop:4}}>
+                      <button onClick={()=>{setTrustDeleteOpen(false);setTrustDeletePw("");setTrustDeleteError("");}} style={{flex:1,padding:"8px 0",borderRadius:9,border:"1px solid #fca5a5",background:"white",color:"#7f1d1d",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>Cancel</button>
+                      <button onClick={()=>{
+                        const stored = profile?.passwordHash;
+                        const entered = btoa(unescape(encodeURIComponent(trustDeletePw)));
+                        if(!stored){ localStorage.removeItem(STORAGE_KEY); window.location.reload(); return; }
+                        if(entered===stored){ localStorage.removeItem(STORAGE_KEY); window.location.reload(); }
+                        else { setTrustDeleteError("Incorrect password. Please try again."); }
+                      }} style={{flex:2,padding:"8px 0",borderRadius:9,border:"none",background:"#dc2626",color:"white",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"'Sora',sans-serif"}}>Confirm Delete</button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
