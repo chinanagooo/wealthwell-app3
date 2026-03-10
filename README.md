@@ -4,6 +4,46 @@
 
 Developed by the **TechTitans** team for the **NTU Fintech Innovators' Hackathon**.
 
+---
+
+## Getting Started
+
+### Option A — Docker (Recommended)
+
+```bash
+# Clone the repository
+git clone https://github.com/chinanagooo/finora.git
+cd finora
+
+# Build the Docker image
+docker build -t finora .
+
+# Run the container (host port 8080 → container port 80)
+docker run -p 8080:80 -d --name finora finora
+
+# Open in browser
+# http://localhost:8080
+```
+
+### Option B — Local Development
+
+```bash
+# Clone the repository
+git clone https://github.com/chinanagooo/finora.git
+cd finora
+
+# Install dependencies
+npm install
+
+# Start the Vite development server
+npm run dev
+
+# Open in browser
+# http://localhost:5173
+```
+
+---
+
 ## Authentication Flow
 
 Finora uses a lightweight browser-side auth layer:
@@ -238,44 +278,6 @@ finora/
 **No routing library.** Screen navigation uses a single `screen` state string. The sidebar updates this string; the main panel conditionally renders the matching screen. This keeps bundle size minimal.
 
 **Sign out without data loss.** `setLoggedIn(false)` returns the user to the login screen while leaving all `localStorage` data intact. Account deletion is a separate, password-gated action in the Trust Centre.
-
----
-
-## Getting Started
-
-### Option A — Docker (Recommended)
-
-```bash
-# Clone the repository
-git clone https://github.com/chinanagooo/finora.git
-cd finora
-
-# Build the Docker image
-docker build -t finora .
-
-# Run the container (host port 8080 → container port 80)
-docker run -p 8080:80 -d --name finora finora
-
-# Open in browser
-# http://localhost:8080
-```
-
-### Option B — Local Development
-
-```bash
-# Clone the repository
-git clone https://github.com/chinanagooo/finora.git
-cd finora
-
-# Install dependencies
-npm install
-
-# Start the Vite development server
-npm run dev
-
-# Open in browser
-# http://localhost:5173
-```
 
 ---
 
