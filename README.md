@@ -42,8 +42,6 @@ npm run dev
 
 ---
 
----
-
 ## Available Scripts
 
 ```bash
