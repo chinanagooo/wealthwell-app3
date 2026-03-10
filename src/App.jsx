@@ -484,22 +484,52 @@ function EDonut({ assets, liabilities, cur }) {
   const totalA = assets.reduce((s,a)=>s+a.value,0);
   const totalL = liabilities.reduce((s,l)=>s+l.value,0);
   const catColors = ASSET_COLORS;
-  const top = [{ name:"Assets", value:totalA, color:"#6366f1" },{ name:"Liabilities", value:totalL, color:"#ef4444" }];
-  const detail = expanded==="assets"
-    ? Object.entries(assets.reduce((acc,a)=>({...acc,[a.category]:(acc[a.category]||0)+a.value}),{})).map(([k,v])=>({name:k,value:v,color:catColors[k]||"#94a3b8"}))
-    : liabilities.map((l,i)=>({...l,color:["#ef4444","#f97316","#fb923c"][i%3]}));
-  const segs=expanded?detail:top, total=expanded?(expanded==="assets"?totalA:totalL):(totalA+totalL);
-  const cx=82,cy=82,r=66,inn=44,size=164,toR=d=>d*Math.PI/180;
-  let cum=-90;
-  const arcs=segs.map(s=>{
-    const pct=s.value/total,ang=pct*360,sa=cum,ea=cum+ang; cum+=ang;
-    const lg=ang>180?1:0;
-    const x1=cx+r*Math.cos(toR(sa)),y1=cy+r*Math.sin(toR(sa));
-    const x2=cx+r*Math.cos(toR(ea-.5)),y2=cy+r*Math.sin(toR(ea-.5));
-    const ix1=cx+inn*Math.cos(toR(ea-.5)),iy1=cy+inn*Math.sin(toR(ea-.5));
-    const ix2=cx+inn*Math.cos(toR(sa)),iy2=cy+inn*Math.sin(toR(sa));
-    return{...s,d:`M${x1} ${y1} A${r} ${r} 0 ${lg} 1 ${x2} ${y2} L${ix1} ${iy1} A${inn} ${inn} 0 ${lg} 0 ${ix2} ${iy2} Z`,pct:Math.round(pct*100)};
-  });
+
+  // Build top-level or drill-down segments, filtering out zero-value entries
+  const rawTop = [
+    { name:"Assets",      value:totalA, color:"#6366f1" },
+    { name:"Liabilities", value:totalL, color:"#ef4444" },
+  ].filter(s=>s.value>0);
+
+  const rawDetail = expanded==="assets"
+    ? Object.entries(assets.reduce((acc,a)=>({...acc,[a.category]:(acc[a.category]||0)+a.value}),{}))
+        .map(([k,v])=>({name:k,value:v,color:catColors[k]||"#94a3b8"})).filter(s=>s.value>0)
+    : liabilities.filter(l=>l.value>0).map((l,i)=>({...l,color:["#ef4444","#f97316","#fb923c","#fbbf24","#a78bfa"][i%5]}));
+
+  const segs  = expanded ? rawDetail : rawTop;
+  const total = segs.reduce((s,x)=>s+x.value,0);
+
+  const cx=82, cy=82, r=66, inn=44, size=164;
+  const toR = d => d*Math.PI/180;
+
+  // Build arc path — clamp single-segment to 359.99° to avoid degenerate SVG arc
+  const arcs = (() => {
+    if (!segs.length || total===0) return [];
+    let cum = -90;
+    return segs.map(s => {
+      const pct = s.value / total;
+      const ang = Math.min(pct * 360, 359.99);
+      const sa = cum, ea = cum + ang;
+      cum += pct * 360; // advance by real angle to avoid drift
+      const lg = ang > 180 ? 1 : 0;
+      const x1  = cx + r   * Math.cos(toR(sa)),    y1  = cy + r   * Math.sin(toR(sa));
+      const x2  = cx + r   * Math.cos(toR(ea)),     y2  = cy + r   * Math.sin(toR(ea));
+      const ix1 = cx + inn * Math.cos(toR(ea)),     iy1 = cy + inn * Math.sin(toR(ea));
+      const ix2 = cx + inn * Math.cos(toR(sa)),     iy2 = cy + inn * Math.sin(toR(sa));
+      return { ...s, pct:Math.round(pct*100),
+        d:`M${x1.toFixed(2)} ${y1.toFixed(2)} A${r} ${r} 0 ${lg} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} L${ix1.toFixed(2)} ${iy1.toFixed(2)} A${inn} ${inn} 0 ${lg} 0 ${ix2.toFixed(2)} ${iy2.toFixed(2)} Z` };
+    });
+  })();
+
+  // Empty state
+  if (!arcs.length) return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:164,color:"#94a3b8",fontSize:11,fontWeight:600}}>
+      Add assets or liabilities to see your portfolio breakdown
+    </div>
+  );
+
+  const hovSeg = hov!==null ? arcs[hov] : null;
+
   return (
     <div style={{display:"flex",gap:16,alignItems:"center",flexWrap:"wrap"}}>
       <div style={{position:"relative",flexShrink:0}}>
@@ -507,23 +537,52 @@ function EDonut({ assets, liabilities, cur }) {
           {arcs.map((a,i)=>(
             <path key={i} d={a.d} fill={a.color} stroke="white" strokeWidth="2"
               opacity={hov===null||hov===i?1:0.28}
-              style={{cursor:"pointer",transition:"all 0.2s",transform:hov===i?"scale(1.05)":"scale(1)",transformOrigin:`${cx}px ${cy}px`}}
-              onClick={()=>{if(!expanded&&a.name==="Assets")setExpanded("assets");else if(!expanded&&a.name==="Liabilities")setExpanded("liabilities");else setExpanded(null);}}
+              style={{cursor:"pointer",transition:"opacity 0.2s, transform 0.2s",transform:hov===i?"scale(1.05)":"scale(1)",transformOrigin:`${cx}px ${cy}px`}}
+              onClick={()=>{
+                if(!expanded && a.name==="Assets") setExpanded("assets");
+                else if(!expanded && a.name==="Liabilities") setExpanded("liabilities");
+                else setExpanded(null);
+              }}
               onMouseEnter={()=>setHov(i)} onMouseLeave={()=>setHov(null)}/>
           ))}
-          <text x={cx} y={cy-5}  textAnchor="middle" fontSize="9"  fill="#64748b" fontFamily="'Sora',sans-serif">{hov!==null?arcs[hov]?.name:expanded||"Portfolio"}</text>
-          <text x={cx} y={cy+10} textAnchor="middle" fontSize="13" fontWeight="800" fill="#0f172a" fontFamily="'Sora',sans-serif">{hov!==null?`${arcs[hov]?.pct}%`:fc(total,cur,true)}</text>
+          <text x={cx} y={cy-6}  textAnchor="middle" fontSize="9"  fill="#64748b" fontFamily="'Sora',sans-serif">
+            {hovSeg ? hovSeg.name : expanded || "Portfolio"}
+          </text>
+          <text x={cx} y={cy+9} textAnchor="middle" fontSize="13" fontWeight="800" fill="#0f172a" fontFamily="'Sora',sans-serif">
+            {hovSeg ? `${hovSeg.pct}%` : fc(total,cur,true)}
+          </text>
         </svg>
-        {expanded&&<button onClick={()=>setExpanded(null)} style={{position:"absolute",top:4,right:4,background:"#f1f5f9",border:"none",borderRadius:99,width:20,height:20,fontSize:10,cursor:"pointer",color:"#64748b"}}>←</button>}
+        {expanded&&(
+          <button onClick={()=>setExpanded(null)}
+            style={{position:"absolute",top:4,right:4,background:"#f1f5f9",border:"none",borderRadius:99,width:20,height:20,fontSize:10,cursor:"pointer",color:"#64748b"}}>
+            ←
+          </button>
+        )}
       </div>
       <div style={{flex:1,minWidth:130}}>
-        <div style={{fontSize:9,fontWeight:700,color:"#6366f1",marginBottom:7}}>{expanded?`${expanded==="assets"?"Asset Classes":"Liability Types"} — click to go back`:"Click a slice to drill down"}</div>
+        <div style={{fontSize:9,fontWeight:700,color:"#6366f1",marginBottom:7}}>
+          {expanded ? `${expanded==="assets"?"Asset Classes":"Liability Types"} — click to go back` : "Click a slice to drill down"}
+        </div>
         {arcs.map((a,i)=>(
-          <div key={i} style={{display:"flex",alignItems:"center",gap:6,marginBottom:5,padding:"4px 6px",borderRadius:5,background:hov===i?"#f8fafc":"transparent"}}
-            onMouseEnter={()=>setHov(i)} onMouseLeave={()=>setHov(null)}>
+          <div key={i}
+            style={{display:"flex",alignItems:"center",gap:6,marginBottom:5,padding:"4px 6px",borderRadius:5,background:hov===i?"#f1f5f9":"transparent",cursor:"pointer"}}
+            onMouseEnter={()=>setHov(i)} onMouseLeave={()=>setHov(null)}
+            onClick={()=>{
+              if(!expanded && a.name==="Assets") setExpanded("assets");
+              else if(!expanded && a.name==="Liabilities") setExpanded("liabilities");
+              else setExpanded(null);
+            }}>
             <div style={{width:8,height:8,borderRadius:"50%",background:a.color,flexShrink:0}}/>
-            <div style={{flex:1}}><div style={{fontSize:10,fontWeight:700,color:"#0f172a"}}>{a.name}</div><div style={{height:3,background:"#f1f5f9",borderRadius:99,marginTop:2}}><div style={{height:"100%",width:`${a.pct}%`,background:a.color,borderRadius:99}}/></div></div>
-            <div style={{textAlign:"right"}}><div style={{fontSize:10,fontWeight:800,color:a.color}}>{a.pct}%</div><div style={{fontSize:9,color:"#64748b"}}>{fc(a.value,cur,true)}</div></div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:10,fontWeight:700,color:"#0f172a"}}>{a.name}</div>
+              <div style={{height:3,background:"#e2e8f0",borderRadius:99,marginTop:2}}>
+                <div style={{height:"100%",width:`${a.pct}%`,background:a.color,borderRadius:99,transition:"width 0.4s ease"}}/>
+              </div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:10,fontWeight:800,color:a.color}}>{a.pct}%</div>
+              <div style={{fontSize:9,color:"#64748b"}}>{fc(a.value,cur,true)}</div>
+            </div>
           </div>
         ))}
       </div>
@@ -1860,7 +1919,10 @@ export default function App() {
         input:focus,select:focus{border-color:#6366f1!important;outline:none!important;}
         /* ── Scenario Lab sliders ─────────────────────────────────────── */
         .sc-slider{-webkit-appearance:none;appearance:none;height:6px;border-radius:99px;background:linear-gradient(90deg,#1d4ed8,#6366f1);outline:none;cursor:pointer;transition:box-shadow 0.2s;}
-        .sc-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:20px;height:20px;border-radius:50%;background:white;border:3px solid #1d4ed8;box-shadow:0 2px 8px rgba(29,78,216,0.35);cursor:pointer;transition:border-color 0.2s,transform 0.15s;}
+        .sc-slider::-webkit-slider-runnable-track{height:6px;border-radius:99px;background:linear-gradient(90deg,#1d4ed8,#6366f1);}
+        .sc-slider::-moz-range-track{height:6px;border-radius:99px;background:linear-gradient(90deg,#1d4ed8,#6366f1);border:none;}
+        .sc-slider::-moz-range-progress{height:6px;border-radius:99px;background:#1d4ed8;}
+        .sc-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:20px;height:20px;border-radius:50%;background:white;border:3px solid #1d4ed8;box-shadow:0 2px 8px rgba(29,78,216,0.35);cursor:pointer;transition:border-color 0.2s,transform 0.15s;margin-top:-7px;}
         .sc-slider::-webkit-slider-thumb:hover{transform:scale(1.18);border-color:#6366f1;}
         .sc-slider::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:white;border:3px solid #1d4ed8;box-shadow:0 2px 8px rgba(29,78,216,0.35);cursor:pointer;}
         .sc-slider:hover{box-shadow:0 0 0 3px rgba(99,102,241,0.18);}
