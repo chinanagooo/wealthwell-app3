@@ -23,6 +23,7 @@ The app is also designed for different users. Investor Mode presents insights in
 ## Financial Resilience
 
 What makes Finora unique is its focus on financial resilience rather than simple wealth tracking. By combining unified wealth visibility with resilience analysis and scenario testing, Finora transforms complex financial data into practical guidance, making it a cohesive wealth hub.
+
 ---
 
 ## Authentication Flow
